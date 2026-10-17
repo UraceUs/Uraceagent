@@ -3,8 +3,8 @@
  * que ela precisa editar ... É como se fosse um Canva."
  * O painel mexe nesta página só com classes e atributos (a política do site não deixa estilo inline):
  * ed-hover e ed-sel (o contorno), ed-solta-* (onde vai cair), ed-vazio e data-ed-dica (o marcador de vazio),
- * data-ed-oculto (a faixa escondida), contenteditable (o texto em edição). Motion só em opacity, curto, e desligado
- * com prefers-reduced-motion. */
+ * data-ed-oculto (a faixa escondida), contenteditable (o texto em edição). Motion só em opacity, com os tokens do site
+ * (--dur e --curva do site.css, que a prévia carrega antes) e desligado com prefers-reduced-motion. */
 :root { --ed-azul: #0a6cff; --ed-azul-fundo: rgba(10, 108, 255, .10); --ed-erro: #d4351c }
 
 /* tocar e segurar não abre o menu do celular nem seleciona texto; o texto em edição seleciona normalmente */
@@ -41,5 +41,5 @@ html.ed-arrasto, html.ed-arrasto * { cursor: grabbing }
 .ed-solta-dentro { outline: 2px dashed var(--ed-azul); outline-offset: 2px; background-color: var(--ed-azul-fundo) }
 
 @media (prefers-reduced-motion: no-preference) {
-  .ed-arrastando, [data-ed-oculto] { transition: opacity 120ms cubic-bezier(.2, .7, .2, 1) }
+  .ed-arrastando, [data-ed-oculto] { transition: opacity var(--dur) var(--curva) }   /* os tokens do site.css */
 }

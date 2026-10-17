@@ -1,5 +1,6 @@
 /* Editor do site como o Canva (#315): o texto escrito no lugar, na prévia. O colar e o texto formatado passam por
- * uma limpeza aqui (as mesmas tags que o servidor aceita em vitrine/html_seguro.py); quem decide no fim é o servidor. */
+ * uma limpeza aqui (as mesmas tags e os mesmos endereços que o servidor aceita em vitrine/html_seguro.py); quem
+ * decide no fim é o servidor. */
 
 const PERMITIDAS = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI', 'H2', 'H3', 'H4', 'A'])
 const SOMEM = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'SVG', 'MATH', 'NOSCRIPT', 'HEAD', 'TITLE', 'META', 'LINK'])
@@ -10,6 +11,15 @@ export function linkOk(v: string): string | null {
   if (/^\/[A-Za-z0-9/_\-.?=&%#]*$/.test(t) || /^https:\/\/[^\s"'<>]+$/.test(t)
       || /^(tel:\+?[0-9 ()-]{6,20}|mailto:[^\s"'<>@]+@[^\s"'<>]+)$/.test(t)) return t.slice(0, 300)
   return null
+}
+
+/** O mesmo que `_url_ok` do `html_seguro` do servidor (o que ele guarda dentro do texto): o link pode ser http(s),
+ *  caminho do site, mailto: ou tel:; a foto, https ou caminho do site. Nunca `//outro-site`. É mais largo que o
+ *  `linkOk` (o do link novo, na barra) para o texto antigo não perder link nem foto quando se escreve nele. */
+function urlDoTexto(v: string, img = false): string | null {
+  const t = (v || '').trim()
+  if (t.startsWith('//')) return null
+  return (img ? /^(https:\/\/|\/)[^\s"'<>]+$/ : /^(https?:\/\/|\/|mailto:|tel:)[^\s"'<>]+$/).test(t) ? t : null
 }
 
 /** HTML qualquer (o colado, o do contenteditable) → só as tags do texto do site. `<div>` vira parágrafo. Usa um
@@ -25,9 +35,19 @@ export function limparHtml(html: string): string {
       const el = n as Element
       const tag = el.tagName === 'DIV' ? 'P' : el.tagName
       if (SOMEM.has(tag)) return
+      if (tag === 'IMG') {           // a foto que o servidor aceita no texto fica (só o endereço e a descrição)
+        const src = urlDoTexto(el.getAttribute('src') || '', true)
+        if (src) {
+          const im = saida.createElement('img')
+          im.setAttribute('src', src)
+          im.setAttribute('alt', el.getAttribute('alt') || '')
+          para.appendChild(im)
+        }
+        return
+      }
       if (!PERMITIDAS.has(tag)) { copiar(el, para); return }       // tag de fora: fica o texto dela
       if (tag === 'A') {
-        const href = linkOk(el.getAttribute('href') || '')
+        const href = urlDoTexto(el.getAttribute('href') || '')
         if (!href) { copiar(el, para); return }
         const a = saida.createElement('a')
         a.setAttribute('href', href)

@@ -46,7 +46,7 @@ interface Props {
 }
 type Balao = 'link' | 'alt' | 'linkTexto'
 
-const TAM: [string, string, string][] = [['p', 'P', tr("Pequeno")], ['m', 'M', tr("Médio")], ['g', 'G', tr("Grande")]]
+const TAM: [string, string, string][] = [['p', tr("P"), tr("Pequeno")], ['m', tr("M"), tr("Médio")], ['g', tr("G"), tr("Grande")]]
 const COR: [string, string][] = [['padrao', tr("Cor padrão")], ['marca', tr("Vermelho da marca")], ['suave', tr("Cinza suave")]]
 const CATS: [string, string][] = [['', tr("Todas")], ['chassis', 'Chassis'], ['competition-karts', 'Competition karts'], ['engines', 'Engines'],
   ['parts', 'Parts'], ['tires', 'Tires'], ['custom-kart-suits', 'Custom kart suits'], ['official-urace-products', 'Official URACE products'],
@@ -65,8 +65,9 @@ export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreit
   const [pop, setPop] = useState<Balao | null>(null)
   const [valor, setValor] = useState('')
   const [aviso, setAviso] = useState('')
-  // o balão pedido de fora (a foto que acabou de subir pede a descrição; Ctrl+K no texto pede o link)
-  const [visto, setVisto] = useState(balao?.vez)
+  // o balão pedido de fora (a foto que acabou de subir pede a descrição; Ctrl+K no texto pede o link). O Editor só
+  // passa o pedido desta peça; a barra recém-montada (a foto que entrou agora, key nova) também abre o dela
+  const [visto, setVisto] = useState<number | undefined>(undefined)
   if (balao && balao.vez !== visto) {
     setVisto(balao.vez); setPop(balao.qual); setAviso('')
     setValor(balao.qual === 'link' ? w?.link || '' : balao.qual === 'alt' ? w?.alt || '' : '')
@@ -127,7 +128,7 @@ export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreit
   if (w) {
     switch (w.tipo) {
       case 'titulo': miolo = <>
-        <G rotulo={tr("Nível do título")}>{[1, 2, 3].map(n => <B key={n} on={w.nivel === n} rotulo={n === 1 ? tr("Nível 1: o título da página (um só)") : n === 2 ? tr("Nível 2: título de seção") : tr("Nível 3: subtítulo")}
+        <G rotulo={tr("Nível do título")}>{[1, 2, 3].map(n => <B key={n} on={w.nivel === n} rotulo={n === 1 ? tr("H1: o título da página (um só)") : n === 2 ? tr("H2: título de seção") : tr("H3: subtítulo")}
           disabled={n === 1 && h1Ocupado && w.nivel !== 1} onClick={() => a.mudarW({ nivel: n })}>H{n}</B>)}</G>
         {escrever(w)}{tamanho(w.tamanho, x => a.mudarW({ tamanho: x }))}{cor(w)}{alinhar(w)}</>; break
       case 'texto': miolo = <>
@@ -145,7 +146,7 @@ export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreit
         <G rotulo={tr("Link do botão")}><B on={pop === 'link'} rotulo={tr("Link do botão")} onClick={() => abrir('link')}>{tr("Link")}{w.link ? '' : ' !'}</B></G>
         {alinhar(w)}</>; break
       case 'imagem': miolo = <>
-        <G rotulo={tr("Foto")}><B rotulo={tr("Trocar a foto")} onClick={a.trocarFoto}>{w.src ? tr("Trocar foto") : tr("Escolher foto")}</B>
+        <G rotulo={tr("Foto")}><B rotulo={w.src ? tr("Trocar foto") : tr("Escolher foto")} onClick={a.trocarFoto}>{w.src ? tr("Trocar foto") : tr("Escolher foto")}</B>
           <B on={pop === 'alt'} rotulo={tr("Descrição da foto")} onClick={() => abrir('alt')} className={w.src && !w.alt ? 'ed-falta' : ''}>{tr("Descrição")}{w.src && !w.alt ? ' !' : ''}</B>
           {!w.legenda && <B rotulo={tr("Pôr legenda")} onClick={a.legenda}>{tr("Legenda")}</B>}</G>
         {escrever(w)}

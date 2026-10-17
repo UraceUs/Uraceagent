@@ -8,7 +8,7 @@
  * O rascunho salva sozinho (com a revisão: duas pessoas não apagam o que a outra fez) e a prévia troca só a seção que
  * mudou, sem recarregar. Publicar só com tudo salvo, sem erro e sem pendência: o que vai para o ar é o que a tela
  * mostra. */
-import { useEffect, useRef, useState, type PointerEvent as PE } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
@@ -23,8 +23,8 @@ import { Camadas } from './Camadas'
 import { Historico } from './historico'
 import { Lona, type LonaApi } from './Lona'
 import { acharS, acharW, alternarOculto, colunaW, DE_ESCREVER, duplicarS, duplicarW, existe, item, moverS, moverW, mudarS, mudarW,
-  NOMES, nomeDaPeca, nomeDe, novaSecao, novoWidget, ondeEsta, ordem, passoS, passoW, porSecao, porW, secaoDe, tirarS, tirarW, widget,
-  type Peca } from './modelo'
+  NOMES, nomeDaPeca, nomeDe, novaSecao, novoWidget, ondeEsta, ordem, passoS, passoW, porSecao, porW, resumo, secaoDe, tirarS, tirarW,
+  widget, type Peca } from './modelo'
 import { PaginaPainel, type Versao } from './PaginaPainel'
 import { Paleta } from './Paleta'
 import type { Ganchos, Ponte } from './ponte'
@@ -92,7 +92,8 @@ export function EditorDePagina({ id }: { id: number }) {
   const [porTocar, setPorTocar] = useState<Peca | null>(null)
   const [aviso, setAviso] = useState('')
   const [versoes, setVersoes] = useState<Versao[] | null>(null)
-  const [balao, setBalao] = useState<{ qual: 'link' | 'alt' | 'linkTexto'; vez: number } | null>(null)
+  // o balão pedido de fora vale só para a peça dele (`id`): a barra da foto que acabou de entrar abre a descrição
+  const [balao, setBalao] = useState<{ qual: 'link' | 'alt' | 'linkTexto'; id: string; vez: number } | null>(null)
   const [, setVez] = useState(0)
 
   const docRef = useRef<Doc | null>(null)
@@ -117,8 +118,18 @@ export function EditorDePagina({ id }: { id: number }) {
   const pedeDesenhar = useRef(false)
   const timer = useRef(0)
   const parado = useRef(false)
+  // o aviso do leitor de tela e a folha do celular (quem abriu recebe o foco de volta)
+  const vezDoAviso = useRef(0)
+  const abriuFolha = useRef<HTMLElement | null>(null)
+  const folhaAntes = useRef<Aba | null>(null)
+  const fecharDaFolha = useRef<HTMLButtonElement>(null)
+  const porAqui = useRef<HTMLButtonElement>(null)
+  const fecharSeFolha = useRef<() => boolean>(() => false)
 
   const ponte = (): Ponte | null => lona.current?.ponte() || null
+  /** O aviso do leitor de tela. O texto muda sempre (um espaço fixo alterna no fim): o mesmo aviso duas vezes
+   *  seguidas (a segunda seta, o segundo Ctrl+D) também é lido. */
+  const anunciar = (t: string) => { vezDoAviso.current ^= 1; setAviso(t + (vezDoAviso.current ? '\u00a0' : '')) }
 
   useEffect(() => {
     if (!l.data || docRef.current) return
@@ -162,6 +173,7 @@ export function EditorDePagina({ id }: { id: number }) {
     try {
       const r = await api.patch<Saida>(`/site/editor/paginas/${id}`, { conteudo: d.c, title: d.seo.title, description: d.seo.description,
         ...(p && !p.base && !p.published ? { path: d.seo.path } : {}), rev: rev.current, desenhar })
+      if (r.pagina.rev < rev.current) return      // resposta velha (a tela já tem uma revisão mais nova): não volta atrás
       rev.current = r.pagina.rev
       versaoSalva.current = versao
       saidaRef.current = r; setSaida(r)
@@ -208,7 +220,7 @@ export function EditorDePagina({ id }: { id: number }) {
     hist.current.registrar(atual, o.chave)
     definir(novo)
     agendar(o.desenhar !== false, o.chave ? 700 : 220)
-    if (o.anuncio) setAviso(o.anuncio)
+    if (o.anuncio) anunciar(o.anuncio)
     setVez(x => x + 1)
     return novo
   }
@@ -231,7 +243,7 @@ export function EditorDePagina({ id }: { id: number }) {
     definir(x)
     agendar(true, 0)
     if (!existe(x.c, selRef.current)) selecionar(null)
-    setAviso(volta ? tr("Desfeito") : tr("Refeito"))
+    anunciar(volta ? tr("Desfeito") : tr("Refeito"))
     setVez(n => n + 1)
   }
 
@@ -242,13 +254,15 @@ export function EditorDePagina({ id }: { id: number }) {
       const s = selRef.current
       const pt = ponte()
       const r = s && pt ? pt.retangulo(s) : null
-      setAncora(r ? lona.current?.paraFora(r) || null : null)
+      // a peça nova ainda não está na prévia (o servidor desenha): a barra fica onde estava até ela chegar
+      if (r || !s || !pt || pt.no(s)) setAncora(r ? lona.current?.paraFora(r) || null : null)
       const t = lona.current?.tamanho()
       if (t) setLimites(o => o.w === t.w && o.h === t.h ? o : t)
     })
   }
   function selecionar(s: Sel, rolar = false) {
     if (editRef.current && (!s || s.id !== editRef.current)) ponte()?.pararEdicao()
+    if ((s?.id || null) !== (selRef.current?.id || null)) setBalao(null)
     selRef.current = s
     setSel(s)
     ponte()?.marcar(s)
@@ -289,11 +303,11 @@ export function EditorDePagina({ id }: { id: number }) {
     arrastou(oQue, d) {
       if (oQue.tipo === 's' && typeof d === 'number') {
         const c1 = mudarC(c => moverS(c, oQue.id, d))
-        if (c1) setAviso(tr("{0} movida", nomeDe(c1, oQue, saidaRef.current?.originais || [])))
+        if (c1) anunciar(tr("{0} movida", nomeDe(c1, oQue, saidaRef.current?.originais || [])))
         selecionar(oQue)
       } else if (oQue.tipo === 'w' && typeof d === 'object') {
         const c1 = mudarC(c => moverW(c, oQue.id, d))
-        if (c1) { refletir(c1, oQue.id); setAviso(tr("{0} movido para {1}", NOMES[widget(c1, oQue.id)?.tipo || 'titulo'], ondeEsta(c1, oQue.id))) }
+        if (c1) { refletir(c1, oQue.id); anunciar(tr("{0} movido para {1}", NOMES[widget(c1, oQue.id)?.tipo || 'titulo'], ondeEsta(c1, oQue.id))) }
         selecionar(oQue)
       }
     },
@@ -334,7 +348,7 @@ export function EditorDePagina({ id }: { id: number }) {
     const alvo = d || destinoDaSelecao(c0)
     const c1 = mudarC(c => porW(c, w, alvo))
     if (!c1) return
-    setAviso(tr("{0} inserido em {1}", NOMES[w.tipo], ondeEsta(c1, w.id)))
+    anunciar(tr("{0} inserido em {1}", NOMES[w.tipo], ondeEsta(c1, w.id)))
     selecionar({ tipo: 'w', id: w.id })
     if (w.tipo === 'imagem') { fotoPara.current = { tipo: 'troca', id: w.id }; arquivo.current?.click() }
     else if (DE_ESCREVER.includes(w.tipo)) editarDepois.current = w.id
@@ -354,35 +368,74 @@ export function EditorDePagina({ id }: { id: number }) {
         mudarC(c => porW(c, w, d))
       }
       selecionar({ tipo: 'w', id: wid })
-      if (!docRef.current || !widget(docRef.current.c, wid)?.alt) setBalao({ qual: 'alt', vez: Date.now() })
+      if (!docRef.current || !widget(docRef.current.c, wid)?.alt) setBalao({ qual: 'alt', id: wid, vez: Date.now() })
       toast(tr("Foto salva (WebP, sem a localização do celular): escreva a descrição dela."), 'ok')
     } catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  /** O foco não cai no body quando a peça muda: a barra remonta (`key={sel.id}`) e a linha das Camadas que muda de
+   *  coluna ou de seção é outra. Guarde antes de mudar; a volta (com o id que fica escolhido) devolve o foco ao mesmo
+   *  botão da barra, ou ao mesmo botão da linha da peça nas Camadas. A barra de uma peça nova só aparece quando o
+   *  servidor desenha a peça: tenta de novo a cada quadro (até ~2 s), e para se o foco já foi para outro lugar. */
+  function guardarFoco() {
+    const a = document.activeElement as HTMLElement | null
+    const rot = a?.getAttribute('aria-label') || null
+    const grupo = a?.closest('.ed-barra') ? a.closest('.ed-grupo')?.getAttribute('aria-label') ?? '' : null
+    const nasCamadas = !!a?.closest('.ed-camadas')
+    const ok = (b: Element | null | undefined): b is HTMLElement => !!b && !(b as HTMLButtonElement).disabled
+    const alvo = (id?: string | null): HTMLElement | null | undefined => {
+      if (nasCamadas) {
+        const nome = id ? document.querySelector<HTMLElement>(`.ed-camadas [data-camada="${id}"]`) : null
+        const igual = a?.hasAttribute('data-camada') ? null
+          : Array.from(nome?.closest('.ed-camada')?.querySelectorAll('button') || []).find(b => b.getAttribute('aria-label') === rot)
+        return ok(igual) ? igual : nome
+      }
+      const bs = Array.from(document.querySelectorAll<HTMLButtonElement>('.ed-barra button')).filter(ok)
+      return bs.find(b => b.getAttribute('aria-label') === rot) || bs.find(b => (b.closest('.ed-grupo')?.getAttribute('aria-label') ?? '') === grupo) || bs[0]
+    }
+    return (id?: string | null) => {
+      if (!a || (grupo === null && !nasCamadas)) return
+      let posto: HTMLElement | null | undefined = null
+      const tentar = (n: number) => requestAnimationFrame(() => {
+        const agora = document.activeElement
+        // ficou onde estava (e ainda vale), ou a pessoa foi para outro lugar: não mexe
+        if (agora && agora !== document.body && agora !== posto && agora.isConnected && !(agora as HTMLButtonElement).disabled) return
+        if (agora !== posto) { posto = alvo(id); posto?.focus() }
+        if (n > 0) tentar(n - 1)          // e confere de novo: a barra some um instante enquanto a peça nova é desenhada
+      })
+      tentar(120)
+    }
   }
   function mover(s: NonNullable<Sel>, passo: number) {
     const c0 = docRef.current?.c
     if (!c0) return
+    const volta = guardarFoco()
     if (s.tipo === 'w') {
       const c1 = mudarC(c => passoW(c, s.id, passo))
-      if (c1) { refletir(c1, s.id); setAviso(tr("{0} movido para {1}", NOMES[widget(c1, s.id)?.tipo || 'titulo'], ondeEsta(c1, s.id))) }
+      if (c1) { refletir(c1, s.id); anunciar(tr("{0} movido para {1}", NOMES[widget(c1, s.id)?.tipo || 'titulo'], ondeEsta(c1, s.id))) }
     } else {
       const c1 = mudarC(c => passoS(c, s.id, passo))
-      if (c1) setAviso(tr("{0} na posição {1} de {2}", nomeDe(c1, s, saida?.originais || []), acharS(c1, s.id) + 1, c1.itens.length))
+      if (c1) anunciar(tr("{0} na posição {1} de {2}", nomeDe(c1, s, saidaRef.current?.originais || []), acharS(c1, s.id) + 1, c1.itens.length))
     }
     selecionar(s, true)
+    volta(s.id)
   }
   function coluna(s: NonNullable<Sel>, passo: number) {
     if (s.tipo !== 'w') return
+    const volta = guardarFoco()
     const c1 = mudarC(c => colunaW(c, s.id, passo))
-    if (c1) { refletir(c1, s.id); setAviso(tr("{0} movido para {1}", NOMES[widget(c1, s.id)?.tipo || 'titulo'], ondeEsta(c1, s.id))) }
+    if (c1) { refletir(c1, s.id); anunciar(tr("{0} movido para {1}", NOMES[widget(c1, s.id)?.tipo || 'titulo'], ondeEsta(c1, s.id))) }
     selecionar(s, true)
+    volta(s.id)
   }
   function duplicar(s: NonNullable<Sel>) {
     const c0 = docRef.current?.c
     if (!c0) return
     const [c1, nid] = s.tipo === 'w' ? duplicarW(c0, s.id) : duplicarS(c0, s.id)
     if (c1 === c0) return
+    const volta = guardarFoco()
     mudarC(() => c1, { anuncio: tr("Duplicado") })
     selecionar({ tipo: s.tipo, id: nid })
+    volta(nid)
   }
   function apagar(s: NonNullable<Sel>) {
     const c0 = docRef.current?.c
@@ -390,12 +443,12 @@ export function EditorDePagina({ id }: { id: number }) {
     const it = s.tipo === 's' ? item(c0, s.id) : null
     if (it?.tipo === 'original') { mudarC(c => alternarOculto(c, s.id)); return }
     const pai = s.tipo === 'w' ? secaoDe(c0, s.id) : null
-    const nome = nomeDe(c0, s, saida?.originais || [])
+    const nome = nomeDe(c0, s, saidaRef.current?.originais || [])
     if (s.tipo === 'w') ponte()?.tirarNo(s.id)
-    const nasCamadas = !!(document.activeElement as HTMLElement | null)?.closest('.ed-camadas')
+    const volta = guardarFoco()
     if (mudarC(c => s.tipo === 'w' ? tirarW(c, s.id) : tirarS(c, s.id), { anuncio: tr("{0} apagado (Ctrl+Z desfaz)", nome) })) {
       selecionar(pai ? { tipo: 's', id: pai.id } : null)
-      if (nasCamadas && pai) requestAnimationFrame(() => document.querySelector<HTMLElement>(`.ed-camadas [data-camada="${pai.id}"]`)?.focus())
+      volta(pai?.id)
     }
   }
   function navegar(passo: number) {
@@ -407,7 +460,9 @@ export function EditorDePagina({ id }: { id: number }) {
     const alvo = lista[Math.max(0, Math.min(lista.length - 1, i < 0 ? 0 : i + passo))]
     if (!alvo) return
     selecionar(alvo, true)
-    setAviso(nomeDe(c, alvo, saida?.originais || []))
+    // o nome, o que é e onde está: dois Textos seguidos não soam iguais
+    const w = alvo.tipo === 'w' ? widget(c, alvo.id) : null
+    anunciar([nomeDe(c, alvo, saidaRef.current?.originais || []), w ? resumo(w) : '', w ? ondeEsta(c, alvo.id) : ''].filter(Boolean).join(', '))
     // com o foco nas Camadas, o foco anda junto (Enter no item escolhido escreve nele)
     if ((document.activeElement as HTMLElement | null)?.closest('.ed-camadas'))
       requestAnimationFrame(() => document.querySelector<HTMLElement>(`.ed-camadas [data-camada="${alvo.id}"]`)?.focus())
@@ -419,7 +474,8 @@ export function EditorDePagina({ id }: { id: number }) {
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); desfazer(false); return }
     if (mod && k === 's') { e.preventDefault(); enviar(); return }
-    if (mod && k === 'k') { e.preventDefault(); if (editRef.current) setBalao({ qual: 'linkTexto', vez: Date.now() }); return }
+    if (mod && k === 'k') { e.preventDefault(); if (editRef.current) setBalao({ qual: 'linkTexto', id: editRef.current, vez: Date.now() }); return }
+    if (e.key === 'Escape' && fecharSeFolha.current()) { e.preventDefault(); return }
     if (!gerente) return
     const s = selRef.current
     const c = docRef.current?.c
@@ -452,8 +508,11 @@ export function EditorDePagina({ id }: { id: number }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
+      if (e.key === 'Escape' && fecharSeFolha.current()) { e.preventDefault(); return }      // Esc fecha a folha do celular
       if (t?.closest('input, textarea, select, [contenteditable]') && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's')) return
       if (t?.closest('button, a, summary') && (e.key === 'Enter' || e.key === ' ')) return
+      // as setas na barra e nas abas não andam pela página (a barra remontaria e o foco cairia no body)
+      if (e.key.startsWith('Arrow') && t?.closest('.ed-barra, .ed-abas')) return
       if (t && t !== document.body && !t.closest('.ed, .ed-fora')) return      // o foco está em outra parte do painel
       ganchos.current?.tecla(e)
     }
@@ -501,7 +560,7 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   function escolherDaPaleta(p: Peca) {
     if (engolirClique.current) { engolirClique.current = false; return }
-    if (estreito) { setFolha(null); setPorTocar(p); setAviso(tr("Toque na página onde quer pôr: {0}", nomeDaPeca(p))); return }
+    if (estreito) { setFolha(null); setPorTocar(p); anunciar(tr("Toque na página onde quer pôr: {0}", nomeDaPeca(p))); return }
     inserir(p, null)
   }
 
@@ -522,19 +581,73 @@ export function EditorDePagina({ id }: { id: number }) {
     try { setVersoes((await api.get<{ versoes: Versao[] }>(`/site/editor/paginas/${id}/versoes`)).versoes) }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
+  /** A versão volta para o rascunho. Vai com a revisão que a tela tem (409 se outra pessoa salvou depois) e só com
+   *  tudo salvo: nenhum salvar no ar nem esperando no relógio, para a resposta de um não desfazer a do outro. */
   async function voltarVersao(vid: number) {
+    if (!gerente) return
+    if (parado.current) { toast(tr("Outra pessoa (ou outra aba) salvou esta página. Recarregue antes de voltar uma versão."), 'crit'); return }
+    if (emVoo.current || versaoLocal.current !== versaoSalva.current) { toast(tr("Ainda salvando: tente de novo em um instante."), 'warn'); enviar(); return }
+    window.clearTimeout(timer.current)
+    emVoo.current = true          // um salvar pedido enquanto a volta está no ar espera (fica pendente)
     try {
-      const r = await api.post<Saida>(`/site/editor/paginas/${id}/versoes/${vid}/voltar`)
+      const r = await api.post<Saida>(`/site/editor/paginas/${id}/versoes/${vid}/voltar`, { rev: rev.current })
+      mudouNoTexto.current = false
       ponte()?.pararEdicao()
+      window.clearTimeout(timer.current)
       rev.current = r.pagina.rev
       saidaRef.current = r; setSaida(r)
+      errosRef.current = {}; setErros({})         // a versão foi publicada: os erros do rascunho de antes não valem mais
       definir({ c: r.pagina.draft, seo: { title: r.pagina.title, description: r.pagina.description, path: r.pagina.path } })
       versaoSalva.current = versaoLocal.current
+      pendente.current = false
+      setSalvo('salvo'); setErroSalvar('')
       hist.current.limpar()
       selecionar(null)
       lona.current?.recarregar()
       toast(tr("A versão voltou para o rascunho: confira e publique."), 'ok')
-    } catch (er) { toast((er as ApiError).message, 'crit') }
+    } catch (er) {
+      const e = er as ApiError
+      if (e.status === 409) { parado.current = true; setSalvo('conflito'); setErroSalvar(e.message) }
+      toast(e.message, 'crit')
+    } finally {
+      emVoo.current = false
+      if (!parado.current && (pendente.current || versaoLocal.current !== versaoSalva.current)) { pendente.current = false; agendar(false, 200) }
+    }
+  }
+  /** A folha do celular: quem abriu recebe o foco de volta quando ela fecha. */
+  function abrirFolha(k: Aba) {
+    if (!folha) abriuFolha.current = document.activeElement as HTMLElement | null
+    setFolha(k)
+  }
+  fecharSeFolha.current = () => { if (!estreito || !folha) return false; setFolha(null); return true }
+  useEffect(() => {
+    const antes = folhaAntes.current
+    folhaAntes.current = folha
+    if (folha && !antes) fecharDaFolha.current?.focus()
+    else if (!folha && antes && !porTocar) {
+      const a = abriuFolha.current
+      abriuFolha.current = null
+      ;(a?.isConnected ? a : document.querySelector<HTMLElement>('.ed-doca button'))?.focus()
+    }
+  }, [folha, porTocar])
+  // "Toque na página onde quer pôr": o foco vai para o botão que põe sem tocar (teclado), não para o body
+  useEffect(() => { if (porTocar) porAqui.current?.focus() }, [porTocar])
+  function porSemTocar() {
+    const p = porTocar
+    if (!p) return
+    setPorTocar(null)
+    inserir(p, null)
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.ed-barra button:not(:disabled)')?.focus())
+  }
+  /** Tab e Shift+Tab ficam dentro da folha aberta (ela é um diálogo modal). */
+  function prenderTab(e: KE<HTMLDivElement>) {
+    if (e.key !== 'Tab') return
+    const fs = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input, textarea, select, summary'))
+      .filter(x => !(x as HTMLButtonElement).disabled && x.offsetParent !== null)
+    if (!fs.length) return
+    const i = fs.indexOf(document.activeElement as HTMLElement)
+    if (e.shiftKey && i <= 0) { e.preventDefault(); fs[fs.length - 1].focus() }
+    else if (!e.shiftKey && (i === fs.length - 1 || i < 0)) { e.preventDefault(); fs[0].focus() }
   }
 
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
@@ -556,7 +669,13 @@ export function EditorDePagina({ id }: { id: number }) {
   const pode = w && lg ? { cima: passoW(c, w.id, -1) !== c, baixo: passoW(c, w.id, 1) !== c, esq: lg.c > 0, dir: lg.c < (c.itens[lg.s] as Secao).colunas - 1 }
     : { cima: sIdx > 0, baixo: sIdx >= 0 && sIdx < c.itens.length - 1, esq: false, dir: false }
   const acoes: AcoesBarra = {
-    mudarW: (x, chave) => { if (!w) return; mudarC(cc => mudarW(cc, w.id, x), { chave, desenhar: true }) },
+    mudarW: (x, chave) => {
+      if (!w) return
+      // a lista de perguntas muda pela barra com o texto em edição: o texto sai da edição antes, para a prévia trocar a
+      // seção (senão a próxima tecla leria as perguntas de antes e desfaria a mudança)
+      if (x.itens && editRef.current === w.id) ponte()?.pararEdicao()
+      mudarC(cc => mudarW(cc, w.id, x), { chave, desenhar: true })
+    },
     mudarS: x => { if (it) mudarC(cc => mudarS(cc, it.id, x)) },
     oculto: () => { if (it) mudarC(cc => alternarOculto(cc, it.id)) },
     passo: n => sel && mover(sel, n),
@@ -573,7 +692,7 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   const barra = gerente && sel && (w || it) ? <Barra key={sel.id} w={w} it={it} nome={nomeDe(c, sel, originais)} editando={!!editando && editando === w?.id}
     h1Ocupado={(ponte()?.contarH1(w?.id) || 0) > 0} erro={w ? erros[w.id] : undefined} pode={pode} a={acoes} estreito={estreito}
-    ancora={ancora} limites={limites} balao={balao} /> : null
+    ancora={ancora} limites={limites} balao={balao && balao.id === sel.id ? balao : null} /> : null
 
   const painel = (qual: Aba) => qual === 'inserir'
     ? <Paleta aoEscolher={escolherDaPaleta} aoArrastar={arrastarDaPaleta} estreito={estreito} />
@@ -588,10 +707,10 @@ export function EditorDePagina({ id }: { id: number }) {
       : <PaginaPainel p={p} seo={doc.seo} gerente={gerente} problemas={atual.problemas} erros={listaErros} mudarSeo={mudarSeo}
         despublicar={() => acao('despublicar', p.base ? tr("O site voltou à página original.") : tr("A página saiu do ar."))}
         versoes={versoes} abrirVersoes={abrirVersoes} voltarVersao={voltarVersao} recarregar={() => lona.current?.recarregar()} />
-  const abas = (onde: 'lado' | 'folha') => <div className="seg ed-abas" role="tablist" aria-label={tr("Painéis do editor")}>
+  const abas = (onde: 'lado' | 'folha') => <div className="seg ed-abas" role="group" aria-label={tr("Painéis do editor")}>
     {ABAS.filter(([k]) => gerente || k !== 'inserir').map(([k, n]) => {
       const on = onde === 'lado' ? aba === k : folha === k
-      return <button key={k} type="button" role="tab" aria-selected={on} className={`btn sm${on ? '' : ' ghost'}`}
+      return <button key={k} type="button" aria-pressed={on} className={`btn sm${on ? '' : ' ghost'}`}
         onClick={() => onde === 'lado' ? setAba(k) : setFolha(k)}>{n}{k === 'pagina' && pend > 0 ? ` (${pend})` : ''}</button>
     })}</div>
   const abaLado: Aba = !gerente && aba === 'inserir' ? 'camadas' : aba
@@ -603,7 +722,7 @@ export function EditorDePagina({ id }: { id: number }) {
       <Link className="btn sm ghost" to="/site/editor">{tr("← Páginas")}</Link>
       <h2 className="h2 ed-nome">{doc.seo.title || p.path}</h2>
       <Chip tone={ESTADO[p.estado][1]}>{ESTADO[p.estado][0]}</Chip>
-      {gerente && <span className={`small ed-salvo${salvo === 'erro' || salvo === 'conflito' ? ' ruim' : ''}`} role="status">
+      {gerente && <span className={`small ed-salvo${salvo === 'erro' || salvo === 'conflito' ? ' ruim' : ''}`}>
         {salvo === 'conflito' ? tr("parado: outra pessoa salvou") : salvo === 'erro' ? tr("não salvou") : salvando ? tr("salvando…") : tr("salvo")}</span>}
       <div className="grow" />
       {gerente && <>
@@ -613,7 +732,7 @@ export function EditorDePagina({ id }: { id: number }) {
         <button type="button" className={`btn sm${tela === 'celular' ? '' : ' ghost'}`} aria-pressed={tela === 'celular'} onClick={() => setTela('celular')}>{tr("Celular")}</button>
         <button type="button" className={`btn sm${tela === 'computador' ? '' : ' ghost'}`} aria-pressed={tela === 'computador'} onClick={() => setTela('computador')}>{tr("Computador")}</button>
       </div>}
-      {gerente && pend > 0 && <button type="button" className="btn sm ghost ed-pend" onClick={() => estreito ? setFolha('pagina') : setAba('pagina')}>
+      {gerente && pend > 0 && <button type="button" className="btn sm ghost ed-pend" onClick={() => estreito ? abrirFolha('pagina') : setAba('pagina')}>
         {tr("{0} pendência(s)", pend)}</button>}
       {gerente && <button type="button" className="btn primary" disabled={!podePublicar} title={pend ? tr("Veja as pendências na aba Página") : undefined}
         onClick={() => acao('publicar', tr("Publicado: o site já mostra."), { rev: rev.current })}>{tr("Publicar")}</button>}
@@ -631,34 +750,36 @@ export function EditorDePagina({ id }: { id: number }) {
         {painel(abaLado)}
       </aside>}
       <div className="ed-palco">
-        {porTocar && <div className="ed-tocar" role="status"><span className="grow">{tr("Toque na página onde quer pôr: {0}", nomeDaPeca(porTocar))}</span>
-          <button type="button" className="btn sm" onClick={() => setPorTocar(null)}>{tr("Cancelar")}</button></div>}
+        {porTocar && <div className="ed-tocar"><span className="grow">{tr("Toque na página onde quer pôr: {0}", nomeDaPeca(porTocar))}</span>
+          <button ref={porAqui} type="button" className="btn sm" onClick={porSemTocar}>{sel ? tr("Pôr depois do selecionado") : tr("Pôr no fim da página")}</button>
+          <button type="button" className="btn sm" onClick={() => { setPorTocar(null); requestAnimationFrame(() => document.querySelector<HTMLElement>('.ed-doca button')?.focus()) }}>{tr("Cancelar")}</button></div>}
+        {/* a barra vem antes da prévia: no Tab, ela chega antes dos links da página */}
+        {!estreito && barra}
         <Lona ref={lona} src={atual.previa} tela={tela} estreito={estreito} editar={gerente} ganchos={pegarGanchos} dica={dica} tampa={tampa}
           aoLigar={pt => { editRef.current = null; setEditando(null)        // prévia nova: nada em edição
             pt.sincronizar(docRef.current?.c || c); pt.marcar(selRef.current); pt.marcarErros(Object.keys(errosRef.current))
             if (versaoLocal.current !== versaoSalva.current) agendar(true, 0)
             reposicionar() }} />
-        {!estreito && barra}
       </div>
     </div>
     {/* o que fica preso na tela vai direto no <body>: o invólucro animado da página viraria a referência do fixed */}
     {createPortal(<div className="ed-fora">
       {estreito && gerente && <div className="ed-doca" style={teclado ? { bottom: teclado + 8 } : undefined}>
         {barra || <div className="ed-barra ed-barra-baixo ed-doca-geral">
-          <button type="button" className="btn sm" onClick={() => setFolha('inserir')}><Icon name="plus" size={16} /> {tr("Inserir")}</button>
-          <button type="button" className="btn sm ghost" onClick={() => setFolha('camadas')}>{tr("Camadas")}</button>
-          <button type="button" className="btn sm ghost" onClick={() => setFolha('pagina')}>{tr("Página")}{pend ? ` (${pend})` : ''}</button>
+          <button type="button" className="btn sm" onClick={() => abrirFolha('inserir')}><Icon name="plus" size={16} /> {tr("Inserir")}</button>
+          <button type="button" className="btn sm ghost" onClick={() => abrirFolha('camadas')}>{tr("Camadas")}</button>
+          <button type="button" className="btn sm ghost" onClick={() => abrirFolha('pagina')}>{tr("Página")}{pend ? ` (${pend})` : ''}</button>
         </div>}
       </div>}
       {estreito && !gerente && <div className="ed-doca"><div className="ed-barra ed-barra-baixo ed-doca-geral">
-        <button type="button" className="btn sm ghost" onClick={() => setFolha('camadas')}>{tr("Camadas")}</button>
-        <button type="button" className="btn sm ghost" onClick={() => setFolha('pagina')}>{tr("Página")}</button></div></div>}
+        <button type="button" className="btn sm ghost" onClick={() => abrirFolha('camadas')}>{tr("Camadas")}</button>
+        <button type="button" className="btn sm ghost" onClick={() => abrirFolha('pagina')}>{tr("Página")}</button></div></div>}
       {estreito && folha && <>
         <div className="ed-folha-fundo" onClick={() => setFolha(null)} />
-        <div className="ed-folha" role="dialog" aria-modal="true" aria-label={ABAS.find(([k]) => k === folha)?.[1]}>
+        <div className="ed-folha" role="dialog" aria-modal="true" aria-label={ABAS.find(([k]) => k === folha)?.[1]} onKeyDown={prenderTab}>
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>
             <h2 className="h2 grow" style={{ margin: 0 }}>{ABAS.find(([k]) => k === folha)?.[1]}</h2>
-            <button type="button" className="btn sm ghost" aria-label={tr("Fechar")} onClick={() => setFolha(null)}><Icon name="x" size={16} /></button>
+            <button ref={fecharDaFolha} type="button" className="btn sm ghost" aria-label={tr("Fechar")} onClick={() => setFolha(null)}><Icon name="x" size={16} /></button>
           </div>
           {abas('folha')}
           {painel(folha)}

@@ -599,7 +599,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .ed-lona{position:relative;overflow:hidden;height:var(--ed-alt);border-radius:var(--r);background:var(--surface-2);border:1px solid var(--glass-line-2)}
 .ed-iframe{position:absolute;top:0;display:block;border:0;background:#fff;transform-origin:0 0}
 .ed-tampa{position:absolute;inset:0;z-index:3;cursor:copy}
-.ed-tocar{position:absolute;top:8px;left:8px;right:8px;z-index:4;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;font-size:13px;box-shadow:var(--shadow-pop)}
+.ed-tocar{position:absolute;top:8px;left:8px;right:8px;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;font-size:13px;box-shadow:var(--shadow-pop)}
 .ed-barra{position:absolute;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:min(720px,calc(100% - 12px));padding:6px;border-radius:14px;background:var(--surface);border:1px solid var(--glass-line-2);box-shadow:var(--shadow-pop);animation:ed-aparece var(--dur-rapida) var(--ease-saida) both}
 .ed-barra .btn{padding:4px 9px;white-space:nowrap}
 .ed-barra .btn.sm .sf{vertical-align:-3px}
@@ -645,6 +645,8 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
   .ed-lona{border-radius:12px}
   .ed-amostra{width:40px;height:40px}
   .ed-escolha{min-height:40px}
+  /* #315: o botão de um símbolo só (P M G, ↑ ↓, ✕, ↶ ↷) também tem 40 px de largura para o dedo */
+  .ed-barra .btn,.ed-camada .btn,.ed-topo .btn,.ed-tocar .btn{min-width:40px;min-height:40px}
 }
 /* #298: produtos da loja no painel */
 .loja-filtros{display:grid;gap:8px;grid-template-columns:minmax(0,3fr) minmax(0,2fr) minmax(0,2fr)}

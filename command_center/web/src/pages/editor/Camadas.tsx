@@ -3,7 +3,7 @@
  * apagar. A escolha aqui é a mesma da prévia; escolher de novo o que já está escolhido escreve nele (como o segundo
  * clique na prévia). */
 import { tr } from '../../i18n'
-import { NOMES, NOMES_FUNDO, nomeDe, resumo } from './modelo'
+import { NOMES, NOMES_FUNDO, nomeDe, passoW, resumo } from './modelo'
 import type { Conteudo, Sel } from './tipos'
 
 interface Props {
@@ -39,15 +39,16 @@ export function Camadas({ c, originais, sel, erros, gerente, selecionar, passo, 
           </>}
         </div>
         {it.tipo === 'secao' && it.itens.some(col => col.length > 0) && <ol>
-          {it.itens.map((col, ci) => col.map((w, wi) => {
+          {it.itens.map((col, ci) => col.map(w => {
             const wsel: NonNullable<Sel> = { tipo: 'w', id: w.id }
             const n = NOMES[w.tipo]
             return <li key={w.id} className={`ed-camada${ehSel('w', w.id) ? ' on' : ''}${erros[w.id] ? ' erro' : ''}`}>
               <button type="button" className="ed-camada-nome" data-camada={w.id} aria-current={ehSel('w', w.id) || undefined} onClick={() => selecionar(wsel)}>
                 {it.colunas > 1 && <span className="small muted">{ci + 1} · </span>}<b>{n}</b> <span className="small muted">{resumo(w)}</span></button>
               {gerente && <>
-                <button type="button" className="btn sm ghost" aria-label={tr("Subir {0}", n)} disabled={s === 0 && ci === 0 && wi === 0 && !c.itens.slice(0, s).some(x => x.tipo === 'secao')} onClick={() => passo(wsel, -1)}>↑</button>
-                <button type="button" className="btn sm ghost" aria-label={tr("Descer {0}", n)} onClick={() => passo(wsel, 1)}>↓</button>
+                {/* a mesma regra da barra: desligado quando subir ou descer não muda nada */}
+                <button type="button" className="btn sm ghost" aria-label={tr("Subir {0}", n)} disabled={passoW(c, w.id, -1) === c} onClick={() => passo(wsel, -1)}>↑</button>
+                <button type="button" className="btn sm ghost" aria-label={tr("Descer {0}", n)} disabled={passoW(c, w.id, 1) === c} onClick={() => passo(wsel, 1)}>↓</button>
                 {it.colunas > 1 && ci > 0 && <button type="button" className="btn sm ghost" aria-label={tr("{0} para a coluna da esquerda", n)} onClick={() => coluna(wsel, -1)}>←</button>}
                 {it.colunas > 1 && ci < it.colunas - 1 && <button type="button" className="btn sm ghost" aria-label={tr("{0} para a coluna da direita", n)} onClick={() => coluna(wsel, 1)}>→</button>}
                 <button type="button" className="btn sm ghost" aria-label={tr("Apagar {0}", n)} onClick={() => apagar(wsel)}>✕</button>

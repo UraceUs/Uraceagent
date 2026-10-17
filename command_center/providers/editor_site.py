@@ -7,8 +7,8 @@
   dela como seções originais; publicada, o editor serve aquele endereço. **Voltar ao original** tira a publicação:
   o site volta à página do código, e o rascunho e as versões ficam.
 - **Revisão** (#315): cada rascunho salvo soma 1 em `rev`. O painel manda o `rev` que tem; se outra pessoa salvou
-  antes, o salvar e o publicar recusam (`Conflito`, 409) em vez de um apagar o que o outro fez, e o Publicar só põe no
-  ar o rascunho que a tela está mostrando.
+  antes, o salvar, o publicar e o voltar versão recusam (`Conflito`, 409) em vez de um apagar o que o outro fez, e o
+  Publicar só põe no ar o rascunho que a tela está mostrando.
 """
 import hashlib
 import json
@@ -172,12 +172,19 @@ def versoes(con, pid):
                                             LEFT JOIN users u ON u.id=v.published_by WHERE v.page_id=? ORDER BY v.id DESC""", (pid,))]
 
 
-def voltar(con, por, pid, vid):
+def voltar(con, por, pid, vid, rev=None):
+    """A versão volta para o rascunho. `rev` (#315): a revisão que a tela tem; se outra pessoa salvou depois, recusa
+    (`Conflito`) em vez de passar por cima do rascunho dela. Como no `salvar`, troca e confere numa operação só: um
+    salvar que caia no meio também recusa, e as duas gravações nunca ficam com a mesma revisão."""
+    p = uma(con, pid)
+    _conferir_rev(p, rev)
     v = um(con, "SELECT * FROM site_page_versions WHERE id=? AND page_id=?", (vid, pid))
     if not v:
         raise ErroEditor("versão não existe")
-    atualizar(con, "site_pages", pid, draft=v["content"], title=v["title"], description=v["description"],
-              rev=int(uma(con, pid).get("rev") or 0) + 1, updated_by=por, updated_at=agora())
+    cur = con.execute("UPDATE site_pages SET draft = ?, title = ?, description = ?, rev = rev + 1, updated_by = ?, updated_at = ? "
+                      "WHERE id = ? AND rev = ?", (v["content"], v["title"], v["description"], por, agora(), pid, int(p.get("rev") or 0)))
+    if cur.rowcount == 0:
+        raise Conflito(CONFLITO)
     return uma(con, pid)
 
 

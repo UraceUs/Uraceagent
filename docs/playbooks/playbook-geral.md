@@ -457,12 +457,14 @@ gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Págin
 - **Clique de novo** (ou duplo clique, ou **Enter**, ou **Escrever** na barra) para **escrever no lugar**: o título, o
   texto, o texto do botão, os itens da lista (Enter cria o próximo), a pergunta e a resposta das perguntas frequentes e a
   legenda da foto. **Esc**, **Enter** (fora do texto longo) ou **Pronto** saem do texto. O que se cola vira texto limpo
-  (só negrito, itálico, lista e link passam no texto longo).
+  (só negrito, itálico, lista e link passam no texto longo). Escrever num texto que já existia não apaga os links nem as
+  fotos que ele tinha.
 - A **barra** muda o resto, com botões: no título, o **nível H1/H2/H3** (o H1 fica desligado quando a página já tem um),
-  **tamanho P/M/G**, **cor** (padrão, vermelho da marca, cinza suave) e **alinhamento**; no texto, também **negrito,
+  **tamanho P/M/G** (com o painel em inglês, S/M/L), **cor** (padrão, vermelho da marca, cinza suave) e **alinhamento**; no texto, também **negrito,
   itálico, lista e link** (marque o texto antes); no botão, **Cheio/Contorno** e **Link** (caminho do site como
   `/contact/`, `https://`, `tel:` ou `mailto:`); na imagem, **Trocar foto**, **Descrição** (obrigatória para publicar),
-  **Legenda** e o formato; nas perguntas, **+ Pergunta / − Pergunta**; em produtos, a categoria e quantos; em cartões, a
+  **Legenda** e o formato; nas perguntas, **+ Pergunta / − Pergunta** (com a pergunta em edição, ela sai da edição para
+  a prévia mostrar a lista nova; clique de novo para escrever); em produtos, a categoria e quantos; em cartões, a
   página. Em toda peça: **↑ ↓** (sobe e desce; no começo ou no fim da coluna passa para a seção vizinha), **← →** (muda de
   coluna), **Duplicar** e **Apagar**.
 - Na **seção**: **fundo** (claro, escuro, vermelho, cinza), **espaço** P/M/G, **1, 2 ou 3 colunas** (no celular viram
@@ -478,16 +480,22 @@ gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Págin
   da borda. Arraste uma peça da aba **Inserir** até a prévia, ou **clique** nela para pôr logo depois do que está
   selecionado. Uma peça solta em cima de uma faixa original vira uma seção nova antes ou depois dela.
 - **Fotos**: solte um arquivo do computador direto na prévia (vira uma imagem ali) ou em cima de uma imagem (troca a foto
-  dela). A foto sobe em WebP de até 1600 px, sem a localização do celular; depois, escreva a **descrição**.
+  dela). A foto sobe em WebP de até 1600 px, sem a localização do celular; a barra da foto já abre a **descrição** para
+  escrever.
 - **No celular**: toque para selecionar; **toque e segure** uma peça para arrastá-la; para inserir, **+ Inserir**, toque
-  na peça e **toque na página onde quer pôr** (Cancelar desiste).
+  na peça e **toque na página onde quer pôr** (Cancelar desiste). Sem tocar (teclado, ou tela de até 900 px com mouse),
+  o botão do aviso, **Pôr depois do selecionado** (ou **Pôr no fim da página**, sem nada selecionado), põe a peça. As
+  folhas de Inserir, Camadas e Página fecham com **Esc** ou no **✕**, e o foco volta para o botão que as abriu.
 - **Camadas** faz tudo isso com botões, para quem usa teclado ou leitor de tela: escolher (escolher de novo escreve),
-  ↑ ↓, ← →, Esconder e Apagar. O leitor de tela ouve onde cada peça foi parar.
+  ↑ ↓ (desligados quando não há para onde ir), ← →, Esconder e Apagar. O foco fica na peça mesmo quando ela muda de
+  coluna ou de seção. O leitor de tela ouve onde cada peça foi parar, e o mesmo aviso duas vezes seguidas também é lido.
 
 **Teclado** (a lista também está em Página › **Atalhos do teclado**): **↑ ↓** o anterior e o próximo · **Enter**
 escreve · **Esc** sai do texto e sobe · **Alt+↑ ↓** move · **Alt+← →** muda de coluna · **Ctrl+Z** desfaz ·
 **Ctrl+Shift+Z** (ou Ctrl+Y) refaz · **Ctrl+D** duplica · **Delete** apaga · **Ctrl+B / I / K** negrito, itálico e link
-no texto · **Ctrl+S** salva já. Desfazer guarda até 100 passos; a digitação seguida no mesmo lugar é um passo só.
+no texto · **Ctrl+S** salva já. Desfazer guarda até 100 passos; a digitação seguida no mesmo lugar é um passo só. Com a
+peça escolhida, o **Tab** chega na barra antes dos links da prévia; ali as setas não trocam a peça, e Duplicar, Apagar
+e ↑ ↓ deixam o foco na barra. ↓ nas peças diz o nome, o que ela mostra e onde está (seção, coluna, posição).
 
 **Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
 nasce com um título nível 1 e um botão. O endereço não muda depois de publicada. Endereços do sistema (`/ops/`,
@@ -503,7 +511,8 @@ de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem 
   Ninguém de fora vê o rascunho. O meio do caminho salva (um título vazio, um botão ainda sem link); o que não pode ir
   para o ar aparece nas **pendências**.
 - **Duas pessoas na mesma página**: se outra pessoa (ou outra aba) salvou antes, a tela para de salvar e avisa
-  **"Outra pessoa salvou esta página"**, com **Recarregar**. Nada do que a outra fez é apagado.
+  **"Outra pessoa salvou esta página"**, com **Recarregar**. Nada do que a outra fez é apagado. Vale também para
+  **Voltar a esta versão**: a tela que ficou para trás não troca o rascunho da outra pessoa pela versão antiga.
 - **Não salvou** (internet caiu, link que não vale): a tela avisa, com **Tentar de novo**, e o **Publicar fica parado**.
   Publicar só funciona com tudo salvo, sem erro e sem pendência: o que vai para o ar é sempre o que a tela mostra.
 - As **pendências** (o número ao lado de Publicar e a aba **Página**) dizem o que falta:
@@ -513,7 +522,8 @@ de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem 
   - imagem com a foto e com a descrição;
   - título da aba de 10 a 70 letras e descrição de 50 a 170.
 - Cada publicação vira uma **versão**: em Página › **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
-  rascunho. Confira e publique de novo.
+  rascunho (e tira os erros do rascunho de antes). Confira e publique de novo. Com o salvar ainda em andamento, a tela
+  pede para tentar de novo em um instante.
 - **Voltar ao original** (página que já existia) tira o editor do ar e o site volta à página de sempre. **Tirar do ar**
   (página nova) tira a página. O rascunho e as versões ficam. **Recarregar a prévia** (em Página) desenha a prévia de novo.
 - A prévia fica fora do Google e sem medição (quem edita não conta como visita do site).

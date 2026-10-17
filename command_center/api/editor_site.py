@@ -220,16 +220,25 @@ def versoes(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.
     return {"versoes": es.versoes(con, pid)}
 
 
+class VoltarIn(BaseModel):
+    rev: int | None = None           # #315: a revisão que a tela tem (409 se outra pessoa salvou depois)
+
+
 @r.post("/paginas/{pid}/versoes/{vid}/voltar")
-def voltar(pid: int, vid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+def voltar(pid: int, vid: int, request: Request, dados: VoltarIn | None = None, con: sqlite3.Connection = Depends(get_db),
+           u=Depends(auth.exige("MANAGER"))):
     """A versão antiga volta para o rascunho (confira na pré-visualização e publique)."""
     try:
-        p = es.voltar(con, u["id"], pid, vid)
+        p = es.voltar(con, u["id"], pid, vid, rev=dados.rev if dados else None)
+    except es.Conflito as e:         # antes do ErroEditor: o Conflito é um ErroEditor e viraria 404
+        raise _conflito(e)
     except ed.ErroEditor as e:
         raise HTTPException(404, str(e))
     _aud(con, request, u, "site.page.restore", pid, {"versao": vid})
     con.commit()
-    return _saida(p, _host(request))
+    out = _saida(p, _host(request))
+    out["erros"] = {}                # a versão foi publicada: nada dela está recusado
+    return out
 
 
 @r.get("/paginas/{pid}/previa", include_in_schema=False)

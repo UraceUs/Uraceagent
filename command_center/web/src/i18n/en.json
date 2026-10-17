@@ -3814,7 +3814,6 @@
 "Média": "Medium",
 "Quadrada": "Square",
 "Legenda": "Caption",
-"Trocar a foto": "Replace photo",
 "Link": "Link",
 "ex.: /contact/ ou https://": "e.g. /contact/ or https://",
 "Estilo": "Style",
@@ -4065,9 +4064,6 @@
 "Escrever no lugar": "Type in place",
 "Escrever": "Type",
 "Nível do título": "Title level",
-"Nível 1: o título da página (um só)": "Level 1: the page title (only one)",
-"Nível 2: título de seção": "Level 2: section title",
-"Nível 3: subtítulo": "Level 3: subtitle",
 "Formatar": "Format",
 "Link (marque o texto antes)": "Link (select the text first)",
 "Cheio": "Filled",
@@ -4098,5 +4094,14 @@
 "Descer {0}": "Move {0} down",
 "Apagar {0}": "Delete {0}",
 "{0} para a coluna da esquerda": "{0} to the left column",
-"{0} para a coluna da direita": "{0} to the right column"
+"{0} para a coluna da direita": "{0} to the right column",
+"P": "S",
+"G": "L",
+"H1: o título da página (um só)": "H1: the page title (only one)",
+"H2: título de seção": "H2: section title",
+"H3: subtítulo": "H3: subtitle",
+"Pôr depois do selecionado": "Put it after the selected one",
+"Pôr no fim da página": "Put it at the end of the page",
+"Outra pessoa (ou outra aba) salvou esta página. Recarregue antes de voltar uma versão.": "Someone else (or another tab) saved this page. Reload before restoring a version.",
+"Ainda salvando: tente de novo em um instante.": "Still saving: try again in a moment."
 }
