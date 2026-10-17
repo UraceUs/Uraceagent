@@ -16,6 +16,7 @@ import { Mic, Ouvir, TextoComVoz } from '../components/Voz'
 import { diaLocal, fmtDate, fmtDateTime, fmtTime, hojeLocal, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { InserirNoTopo } from '../components/Inserir'
 import { Picker } from '../components/Unir'
 import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import { ConexaoGoogle, useStatusGoogle, type EventoGoogle } from '../components/GoogleAgenda'
@@ -345,6 +346,14 @@ export function Oportunidade() {
 
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 14 }}>
       <div className="stack">
+        {/* #312: a anotação fica em cima do histórico, que cresce a cada ligação e nota */}
+        {can('OPERATOR') && <InserirNoTopo rotulo={tr("Anotação (interna)")} titulo={false} sempre>
+          <div className="stack">
+            <label className="small muted">{tr("Anotação (interna)")}</label>
+            <TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder={tr("O que combinou, o que ele pediu… (Enter guarda)")} onEnter={anotar} />
+            <div className="row"><button className="btn sm" disabled={busy === 'nota' || !nota.trim()} onClick={anotar}>{busy === 'nota' ? <Spinner /> : tr("Guardar anotação")}</button></div>
+          </div>
+        </InserirNoTopo>}
         <div className="card">
           <div className="card-h"><h2 className="h2">{tr("Histórico")}</h2><div className="tabs" style={{ marginLeft: 'auto' }}>
             {([['tudo', tr("Tudo")], ['call', tr("Ligações")], ['note', tr("Notas")]] as const).map(([k, l]) => <button key={k} className={aba === k ? 'on' : ''} onClick={() => setAba(k)}>{l}</button>)}</div></div>
@@ -361,11 +370,6 @@ export function Oportunidade() {
           </div>
         </div>
 
-        {can('OPERATOR') && <div className="card card-b stack">
-          <label className="small muted">{tr("Anotação (interna)")}</label>
-          <TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder={tr("O que combinou, o que ele pediu… (Enter guarda)")} onEnter={anotar} />
-          <div className="row"><button className="btn sm" disabled={busy === 'nota' || !nota.trim()} onClick={anotar}>{busy === 'nota' ? <Spinner /> : tr("Guardar anotação")}</button></div>
-        </div>}
       </div>
 
       <div className="stack">

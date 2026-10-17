@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { ago, fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
+import { InserirNoTopo } from '../components/Inserir'
 import { useToast } from '../components/Toast'
 import { Icon } from '../components/Icon'
 import { LOCALE, tr } from '../i18n'
@@ -103,6 +104,16 @@ function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
   return <Section title={tr("Conversas com a IA pausada")} count={d.data?.itens.length}>
     {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={2} /> : <div className="stack" style={{ gap: 12 }}>
       <p className="small muted" style={{ margin: 0 }}>{tr("Numa conversa pausada o robô não responde, não manda follow-up nem resgate: quem fala é a pessoa. O card continua sendo organizado. Também dá para pausar direto no Chat do Kommo.")}</p>
+      {/* #312: pausar uma conversa fica no topo, antes da lista das pausadas */}
+      {pode && <InserirNoTopo rotulo={tr("Pausar a IA numa conversa")} nivel={3} dentro>
+        <form className="sdr-form" onSubmit={e => { e.preventDefault(); if (id > 0) trocar(id, true, motivo.trim()) }}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <label className="fld" style={{ minWidth: 180 }}><span>{tr("Lead no Kommo (id)")}</span><input value={lead} onChange={e => setLead(e.target.value)} inputMode="numeric" placeholder="31764961" /></label>
+            <label className="fld grow" style={{ minWidth: 200 }}><span>{tr("Motivo (opcional)")}</span><input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={200} /></label>
+          </div>
+          <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={!(id > 0) || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Pausar IA")}</button></div>
+        </form>
+      </InserirNoTopo>}
       {!d.data.itens.length ? <Empty title={tr("Nenhuma conversa pausada")}>{tr("O robô responde todas as conversas no escopo dele.")}</Empty>
         : <ul className="sdr-lista">{d.data.itens.map(x => <li key={x.lead_id}>
           <div className="grow" style={{ minWidth: 0 }}>
@@ -113,13 +124,6 @@ function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
           </div>
           {pode && <button className="btn sm" style={{ alignSelf: 'start' }} disabled={busy === x.lead_id} onClick={() => trocar(x.lead_id, false)}>{busy === x.lead_id ? <span className="spin" /> : tr("Reativar IA")}</button>}
         </li>)}</ul>}
-      {pode && <form className="sdr-form" onSubmit={e => { e.preventDefault(); if (id > 0) trocar(id, true, motivo.trim()) }}>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <label className="fld" style={{ minWidth: 180 }}><span>{tr("Lead no Kommo (id)")}</span><input value={lead} onChange={e => setLead(e.target.value)} inputMode="numeric" placeholder="31764961" /></label>
-          <label className="fld grow" style={{ minWidth: 200 }}><span>{tr("Motivo (opcional)")}</span><input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={200} /></label>
-        </div>
-        <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={!(id > 0) || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Pausar IA")}</button></div>
-      </form>}
     </div>}
   </Section>
 }
@@ -252,12 +256,29 @@ function Instrucoes({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
     right={<button className="btn sm" disabled={busy === 'kommo' || !d.data?.itens.length} onClick={gerar}>{busy === 'kommo' ? <span className="spin" /> : tr("Gerar texto para o agente do Kommo")}</button>}>
     {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={3} /> : <div className="stack" style={{ gap: 12 }}>
       <p className="small muted" style={{ margin: 0 }}>{tr("O que você escreve aqui vale acima da persona do robô, com duas exceções fixas: o preço (vem da tabela) e as travas de segurança.")}</p>
+      {/* #312: a instrução nova fica no topo, antes da lista */}
+      {pode && <InserirNoTopo rotulo={tr("Nova instrução")} nivel={3} dentro>
+        <form className="sdr-form" onSubmit={e => { e.preventDefault(); criar() }}>
+          <Banner tone={temPreco(texto) ? 'warn' : 'info'}>{d.data.aviso_preco}</Banner>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <label className="fld" style={{ minWidth: 200 }}><span>{tr("Categoria")}</span>
+              <select value={cat} onChange={e => setCat(e.target.value)}>{Object.keys(d.data.categorias).map(k => <option key={k} value={k}>{CATEGORIA_NOME[k] || d.data!.categorias[k]}</option>)}</select></label>
+          </div>
+          <label className="fld"><span>{tr("Instrução")}</span>
+            <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, limite))} rows={3} maxLength={limite}
+              placeholder={tr("Ex.: responda sempre em inglês quando o lead escrever em inglês; não prometa data de corrida sem confirmar com a equipe.")} /></label>
+          <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
+            <span className="small muted">{texto.length}/{limite}</span>
+            <button className="btn primary" disabled={!texto.trim() || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Gravar instrução")}</button>
+          </div>
+        </form>
+      </InserirNoTopo>}
       {kommo !== null && <div className="sdr-kommo">
         <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}><b>{tr("Texto para a tela do agente do Kommo (cada linha cabe em 300 caracteres)")}</b>
           <div className="row" style={{ gap: 6 }}><button className="btn sm" onClick={copiar}>{tr("Copiar")}</button><button className="btn sm ghost" onClick={() => setKommo(null)}>{tr("Fechar")}</button></div></div>
         <textarea readOnly value={kommo} rows={Math.min(12, Math.max(3, kommo.split('\n').length + 1))} aria-label={tr("Texto para o agente do Kommo")} />
       </div>}
-      {!d.data.itens.length ? <Empty title={tr("Nenhuma instrução ainda")}>{tr("O robô segue a persona padrão. Escreva abaixo o que ele deve fazer diferente.")}</Empty>
+      {!d.data.itens.length ? <Empty title={tr("Nenhuma instrução ainda")}>{tr("O robô segue a persona padrão. Em \"Nova instrução\", em cima, escreva o que ele deve fazer diferente.")}</Empty>
         : <ul className="sdr-lista">{d.data.itens.map(i => <li key={i.id}>
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}><Chip tone="info">{CATEGORIA_NOME[i.categoria] || i.categoria}</Chip>
@@ -271,20 +292,6 @@ function Instrucoes({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
             <button className="btn sm ghost" disabled={busy === i.id} onClick={() => mudar(i, 'arquivada')}>{tr("Arquivar")}</button>
           </div>}
         </li>)}</ul>}
-      {pode && <form className="sdr-form" onSubmit={e => { e.preventDefault(); criar() }}>
-        <Banner tone={temPreco(texto) ? 'warn' : 'info'}>{d.data.aviso_preco}</Banner>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <label className="fld" style={{ minWidth: 200 }}><span>{tr("Categoria")}</span>
-            <select value={cat} onChange={e => setCat(e.target.value)}>{Object.keys(d.data.categorias).map(k => <option key={k} value={k}>{CATEGORIA_NOME[k] || d.data!.categorias[k]}</option>)}</select></label>
-        </div>
-        <label className="fld"><span>{tr("Instrução")}</span>
-          <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, limite))} rows={3} maxLength={limite}
-            placeholder={tr("Ex.: responda sempre em inglês quando o lead escrever em inglês; não prometa data de corrida sem confirmar com a equipe.")} /></label>
-        <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
-          <span className="small muted">{texto.length}/{limite}</span>
-          <button className="btn primary" disabled={!texto.trim() || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Gravar instrução")}</button>
-        </div>
-      </form>}
     </div>}
   </Section>
 }
@@ -313,7 +320,19 @@ function RelatosCard({ podeResolver, onMudou }: { podeResolver: boolean; onMudou
   return <Section title={tr("Relatos")} count={d.data?.abertos}
     right={<label className="check small"><input type="checkbox" checked={verResolvidos} onChange={e => setVerResolvidos(e.target.checked)} /> {tr("ver resolvidos")}</label>}>
     {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={2} /> : <div className="stack" style={{ gap: 12 }}>
-      {!itens.length ? <Empty title={tr("Nenhum relato aberto")}>{tr("O robô errou? Conte aqui: quem cuida do robô lê e resolve.")}</Empty>
+      {/* #312: o relato novo fica no topo, antes da lista */}
+      <InserirNoTopo rotulo={tr("Novo relato")} nivel={3} dentro>
+        <form className="sdr-form" onSubmit={e => { e.preventDefault(); criar() }}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <label className="fld" style={{ minWidth: 200 }}><span>{tr("O que aconteceu")}</span>
+              <select value={tipo} onChange={e => setTipo(e.target.value)}>{Object.keys(d.data.tipos).map(k => <option key={k} value={k}>{TIPO_NOME[k] || d.data!.tipos[k]}</option>)}</select></label>
+            <label className="fld" style={{ minWidth: 200 }}><span>{tr("Lead (id ou nome, se souber)")}</span><input value={lead} onChange={e => setLead(e.target.value)} maxLength={120} /></label>
+          </div>
+          <label className="fld"><span>{tr("Relato")}</span><textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, 1000))} rows={3} maxLength={1000} /></label>
+          <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={!texto.trim() || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Relatar")}</button></div>
+        </form>
+      </InserirNoTopo>
+      {!itens.length ? <Empty title={tr("Nenhum relato aberto")}>{tr("O robô errou? Conte em \"Novo relato\": quem cuida do robô lê e resolve.")}</Empty>
         : <ul className="sdr-lista">{itens.map(r => <li key={r.id}>
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}><Chip tone={r.status === 'aberto' ? 'warn' : 'neutral'}>{r.status === 'aberto' ? tr("aberto") : tr("resolvido")}</Chip>
@@ -323,15 +342,6 @@ function RelatosCard({ podeResolver, onMudou }: { podeResolver: boolean; onMudou
           </div>
           {podeResolver && r.status === 'aberto' && <button className="btn sm" style={{ alignSelf: 'start' }} disabled={busy === r.id} onClick={() => resolver(r)}>{tr("Resolver")}</button>}
         </li>)}</ul>}
-      <form className="sdr-form" onSubmit={e => { e.preventDefault(); criar() }}>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <label className="fld" style={{ minWidth: 200 }}><span>{tr("O que aconteceu")}</span>
-            <select value={tipo} onChange={e => setTipo(e.target.value)}>{Object.keys(d.data.tipos).map(k => <option key={k} value={k}>{TIPO_NOME[k] || d.data!.tipos[k]}</option>)}</select></label>
-          <label className="fld" style={{ minWidth: 200 }}><span>{tr("Lead (id ou nome, se souber)")}</span><input value={lead} onChange={e => setLead(e.target.value)} maxLength={120} /></label>
-        </div>
-        <label className="fld"><span>{tr("Relato")}</span><textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, 1000))} rows={3} maxLength={1000} /></label>
-        <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={!texto.trim() || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Relatar")}</button></div>
-      </form>
     </div>}
   </Section>
 }

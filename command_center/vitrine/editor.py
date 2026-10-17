@@ -353,7 +353,11 @@ def _w(w, dados, primeira_foto, marcar=False):
         return f'<div class="produtos-grade">{"".join(ps._produto_card(p) for p in ps_)}</div>' if ps_ else ""
     if t == "cartoes":
         cs = (dados.get("cartoes") or {}).get(w["pagina"]) or []
-        html = ps._grupos_dos_cartoes(cs, dados.get("planos")) if cs else ""
+        if w["pagina"] == "academy" and dados.get("planos"):
+            # #312 (revisão): a mesma preferência da página: com plano ativo, a Academy mostra os planos, não os cartões
+            html = ps._planos_do_painel(dados["planos"])
+        else:
+            html = ps._grupos_dos_cartoes(cs, dados.get("planos")) if cs else ""
         return f'<div class="ed-caixa">{html}</div>' if html and marcar else html     # #315: um nó só para clicar
     if t == "faq":
         return ps._faq([(x["pergunta"], (x["resposta"],)) for x in w["itens"]], ident=f"faq-{w['id']}") if w["itens"] else ""

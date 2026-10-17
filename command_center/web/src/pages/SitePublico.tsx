@@ -1,14 +1,15 @@
 /* Site público, visto de dentro (#41): a agenda que o cliente usa na área do cliente.
  * Agendamentos: o que o cliente pediu (confirmar, recusar). Disponibilidade: a semana,
  * os horários, os bloqueios — quem mexe é o gerente; a operação vê. */
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useId, useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { usePerguntar } from '../components/Perguntar'
 import { Picker } from '../components/Unir'
+import { InserirNoTopo } from '../components/Inserir'
 import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import type { Client } from '../api/types'
 import { Link } from 'react-router-dom'
@@ -29,7 +30,13 @@ interface Servico { id: number; name: string; description: string | null; price:
   site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null
   deposit_required?: number | boolean | null
   /** #314: a sessão extra do plano — valor (vazio: mensal ÷ sessões) e o item do QuickBooks */
-  extra_price?: number | null; extra_item_id?: string | null; extra_item_name?: string | null }
+  extra_price?: number | null; extra_item_id?: string | null; extra_item_name?: string | null
+  /** #312: onde o serviço aparece hoje no site (a mesma regra que monta as páginas) */
+  no_site?: NoSite }
+/** #312: `servicos_site.onde_no_site` */
+interface NoSite { onde: 'kart' | 'addon' | 'plano' | 'area' | 'repetido' | 'nenhum' | 'desativado'; pagina: string | null; chave: string | null; com: string[] }
+/** #312: as páginas do site em que um serviço ou um cartão entra (`servicos_site.paginas_do_site`) */
+interface PaginaSite { id: string; nome: string; caminho: string; cartoes: boolean }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
@@ -199,6 +206,22 @@ function Disponibilidade() {
     ? <>{tr("toda")} <b>{DIAS_LONGOS[b.weekday]}</b>{b.date_to === '9999-12-31' ? tr(" · desde {0}", dbr(b.date_from)) : tr(" · {0} a {1}", dbr(b.date_from), dbr(b.date_to))}</>
     : <b>{dbr(b.date_from)}{b.date_to !== b.date_from ? tr(" a {0}", dbr(b.date_to)) : ''}</b>
   return <div className="stack" style={{ gap: 18 }}>
+    {/* #312: o "Bloquear" fica no topo da tela (antes era a 3ª seção, depois do calendário e da semana) */}
+    {gerente && <InserirNoTopo rotulo={tr("Bloquear datas")} titulo={tr("Novo bloqueio")}>
+      <div className="stack" style={{ gap: 10 }}>
+        <div className="seg" role="radiogroup" aria-label={tr("Tipo de bloqueio")}>{([['data', tr("Uma data ou período")], ['semana', tr("Toda semana")]] as const).map(([k, r]) =>
+          <button key={k} type="button" role="radio" aria-checked={bl.modo === k} className={`btn sm${bl.modo === k ? '' : ' ghost'}`} onClick={() => setBl({ ...bl, modo: k })}>{r}</button>)}</div>
+        <div className="row gap wrap" style={{ alignItems: 'flex-end' }}>
+          {bl.modo === 'semana' && <label className="fld" style={{ margin: 0 }}><span>{tr("Dia da semana")}</span><select value={bl.weekday} onChange={e => setBl({ ...bl, weekday: Number(e.target.value) })}>
+            {DIAS_LONGOS.map((d, i) => <option key={d} value={i}>{tr("toda")} {d}</option>)}</select></label>}
+          <label className="fld" style={{ margin: 0 }}><span>{bl.modo === 'semana' ? tr("A partir de") : tr("De")}{bl.modo === 'semana' && <i> {tr("(opcional)")}</i>}</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>{tr("Até")} <i>{tr("(opcional)")}</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>{tr("O quê")}</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
+            <option value="dia">{tr("o dia todo")}</option><option value="manha">{tr("só a manhã")}</option><option value="tarde">{tr("só a tarde")}</option></select></label>
+          <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>{tr("Motivo")} <i>{tr("(só a equipe vê)")}</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder={tr("corrida, manutenção, feriado")} /></label>
+          <button className="btn" onClick={bloquear}>{tr("Bloquear")}</button>
+        </div></div>
+    </InserirNoTopo>}
     {nadaAberto && <div className="banner warn"><span className="bi">▲</span><div className="grow">{tr("A agenda está")} <b>{tr("fechada")}</b>{tr(": nenhum dia da semana aberto. Abra abaixo os dias e períodos em que o cliente pode marcar.")}</div></div>}
     <Section title={tr("Calendário do mês")}><Calendario mes={mes} setMes={setMes} dias={a.data.dias} corridas={a.data.corridas || []} /></Section>
 
@@ -233,19 +256,6 @@ function Disponibilidade() {
     </Section>
 
     <Section title={tr("Bloqueios")} count={a.data.bloqueios.length}>
-      {gerente && <div className="stack" style={{ gap: 10, marginBottom: 10 }}>
-        <div className="seg" role="radiogroup" aria-label={tr("Tipo de bloqueio")}>{([['data', tr("Uma data ou período")], ['semana', tr("Toda semana")]] as const).map(([k, r]) =>
-          <button key={k} type="button" role="radio" aria-checked={bl.modo === k} className={`btn sm${bl.modo === k ? '' : ' ghost'}`} onClick={() => setBl({ ...bl, modo: k })}>{r}</button>)}</div>
-        <div className="row gap wrap" style={{ alignItems: 'flex-end' }}>
-          {bl.modo === 'semana' && <label className="fld" style={{ margin: 0 }}><span>{tr("Dia da semana")}</span><select value={bl.weekday} onChange={e => setBl({ ...bl, weekday: Number(e.target.value) })}>
-            {DIAS_LONGOS.map((d, i) => <option key={d} value={i}>{tr("toda")} {d}</option>)}</select></label>}
-          <label className="fld" style={{ margin: 0 }}><span>{bl.modo === 'semana' ? tr("A partir de") : tr("De")}{bl.modo === 'semana' && <i> {tr("(opcional)")}</i>}</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
-          <label className="fld" style={{ margin: 0 }}><span>{tr("Até")} <i>{tr("(opcional)")}</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
-          <label className="fld" style={{ margin: 0 }}><span>{tr("O quê")}</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
-            <option value="dia">{tr("o dia todo")}</option><option value="manha">{tr("só a manhã")}</option><option value="tarde">{tr("só a tarde")}</option></select></label>
-          <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>{tr("Motivo")} <i>{tr("(só a equipe vê)")}</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder={tr("corrida, manutenção, feriado")} /></label>
-          <button className="btn" onClick={bloquear}>{tr("Bloquear")}</button>
-        </div></div>}
       {!a.data.bloqueios.length ? <Empty title={tr("Nenhum bloqueio")} /> : <div className="tbl">{a.data.bloqueios.map(b => <div className="tr" key={b.id}>
         <div className="grow">{descreve(b)} · {PER[b.period]}{b.reason ? <span className="small muted"> · {b.reason}</span> : null}</div>
         {b.weekday != null && <Chip tone="info">{tr("recorrente")}</Chip>}
@@ -275,35 +285,159 @@ function opcoesDeKart(atual: string | null | undefined) {
   return [...KARTS_DO_SITE, ...extra]
 }
 
+interface ListaServicos { servicos: Servico[]; itens_qbo: ItemQbo[]; paginas: PaginaSite[]; chave_addon: string }
+const chaveDe = (k: string | null | undefined) => (k || '').split(/\s+/).filter(Boolean).join(' ').toLowerCase()
+
+/* #312: onde o serviço que já existe aparece hoje no site — a página (com o link) e de que jeito. */
+function OndeNoSite({ n, paginas }: { n?: NoSite; paginas: PaginaSite[] }) {
+  if (!n) return null
+  const pg = paginas.find(p => p.id === n.pagina)
+  // #312 (revisão): o link da página é um botão ao lado do chip (alvo de 40 px no celular), não um link de 17 px dentro dele
+  const ver = pg ? <> <a className="btn sm ghost" href={pg.caminho} target="_blank" rel="noreferrer" aria-label={tr("Abrir {0} no site", pg.nome)}>{tr("Ver no site ↗")}</a></> : null
+  if (n.onde === 'kart') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("kart {0}", n.chave || '')}</Chip>{ver}</>
+  if (n.onde === 'addon') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("add-on na reserva")}</Chip>{ver}</>
+  if (n.onde === 'plano') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("plano mensal")}</Chip>{ver}</>
+  if (n.onde === 'area') return <Chip tone="info">{tr("só na área do cliente")}</Chip>
+  if (n.onde === 'repetido') return <Chip tone="crit">{tr("fora do site: a chave {0} também está em {1} (um serviço ativo por chave)", n.chave || '', n.com.join(', '))}</Chip>
+  if (n.onde === 'nenhum') return <Chip tone="warn">{tr("fora do site: só o add-on Lead and Follow entra na reserva")}</Chip>
+  return <Chip tone="neutral">{tr("desativado")}</Chip>
+}
+
+/* #312 (dono, 16/10): "a gente escolhe em qual página que esse serviço vai estar". O primeiro passo é a página do
+ * site; o segundo, quando a página tem dois jeitos, como ele entra nela. Cada jeito grava o que o site já lê:
+ * - Arrive and Drive · kart: serviço de sessão com o "Kart do site" (`booking_services.site_kart`);
+ * - Arrive and Drive · add-on do dia: serviço de tipo add-on com a chave do Lead and Follow;
+ * - Academy · plano mensal: serviço de tipo plano (com plano ativo, a Academy mostra os planos, não os cartões);
+ * - Academy, Pro Team, For Beginners · cartão de preço: um cartão da página (`site_offers`);
+ * - Só na área do cliente: serviço de sessão sem kart.
+ * Em cada página, o painel mostra o que já está nela hoje; o kart que já tem serviço ativo não se escolhe de novo
+ * (dois serviços com o mesmo kart tiram o kart do site). */
+type Como = 'kart' | 'addon' | 'plano' | 'cartao' | 'area'
+const COMO_DA_PAGINA: Record<string, Como[]> = { 'arrive-and-drive': ['kart', 'addon'], academy: ['plano', 'cartao'], 'pro-team': ['cartao'], 'for-beginners': ['cartao'], area: ['area'] }
+const NOME_COMO: Record<Como, string> = { kart: tr("Kart (reserva online)"), addon: tr("Add-on do dia (Lead and Follow)"), plano: tr("Plano mensal vendido pelo site"),
+  cartao: tr("Cartão de preço"), area: tr("Sessão avulsa") }
+
+function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: () => void }) {
+  const toast = useToast()
+  const id = useId()
+  const { servicos, paginas, chave_addon } = dados
+  // #317 (dono, 16/10): "o serviço que eu coloquei no checkout ia permitir que eu fizesse o checkout … sem o security
+  // deposit". A sessão nova já nasce com o depósito obrigatório marcado: sem valor, não salva.
+  const vazio = { name: '', description: '', price: '', qbo_item: '', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '',
+    deposit: '', deposit_required: true, extra_price: '', extra_item: '' }
+  const [novo, setNovo] = useState(vazio)
+  const [pagina, setPagina] = useState('')
+  const [como, setComo] = useState<Como | ''>('')
+  const c = useGet<{ cartoes: Cartao[]; paginas: Record<string, string>; preco_kart: number }>(pagina && paginas.find(p => p.id === pagina)?.cartoes ? '/site/cartoes' : null)
+  const ativos = servicos.filter(s => s.active)
+  const opcoes = [...paginas.map(p => ({ id: p.id, nome: p.nome })), { id: 'area', nome: tr("Só na área do cliente") }]
+  const escolher = (pg: string) => { setPagina(pg); setComo(COMO_DA_PAGINA[pg][0]) }
+  const kind = como === 'plano' ? 'plan' : como === 'addon' ? 'addon' : 'session'
+  const sessao = kind === 'session'
+  // o kart que já tem serviço ativo: mostra qual é e não deixa repetir
+  const donoDoKart = (k: string) => ativos.filter(s => (s.kind ?? 'session') === 'session' && chaveDe(s.site_kart) === chaveDe(k))
+  const karts = [...KARTS_DO_SITE, ...[...new Set(servicos.filter(s => (s.kind ?? 'session') === 'session' && s.site_kart && !KARTS_DO_SITE.includes(s.site_kart)).map(s => s.site_kart!))]]
+  const addonHoje = ativos.filter(s => s.kind === 'addon' && chaveDe(s.site_kart) === chaveDe(chave_addon))
+  const temPlano = ativos.some(s => s.kind === 'plan')
+  // #312 (revisão, NO FAKE DATA): com plano ativo a Academy mostra os planos, não os cartões — eles não estão na página
+  const cartoesDaPagina = (c.data?.cartoes || []).filter(x => x.page === pagina && x.active)
+  const escondePlano = pagina === 'academy' && temPlano
+  const rotuloCartao = (x: Cartao) => x.grp ? tr("cartão {0} · {1}", x.grp, x.title) : tr("cartão {0}", x.title)
+  const hoje = pagina === 'arrive-and-drive'
+    ? [...servicos.filter(s => s.no_site?.onde === 'kart').map(s => tr("kart {0} ({1})", s.no_site!.chave || '', s.name)),
+      ...servicos.filter(s => s.no_site?.onde === 'addon').map(s => tr("add-on {0}", s.name))]
+    : pagina === 'area' ? servicos.filter(s => s.no_site?.onde === 'area').map(s => s.name)
+    : [...(pagina === 'academy' ? servicos.filter(s => s.no_site?.onde === 'plano').map(s => tr("plano {0}", s.name)) : []),
+      ...(escondePlano ? [] : cartoesDaPagina.map(rotuloCartao))]
+  const kartEscolhido = novo.site_kart === NOVO_KART ? novo.kart_novo.trim() : novo.site_kart
+  const deposito = Number(novo.deposit.replace(/[$,\s]/g, ''))
+  const pode = !!novo.name && !!novo.price && (!sessao || !novo.deposit_required || deposito > 0)
+    && (como !== 'kart' || (!!kartEscolhido && !donoDoKart(kartEscolhido).length)) && (como !== 'addon' || !addonHoje.length)
+  async function criar() {
+    try {
+      await api.post('/site/servicos', { name: novo.name, description: novo.description || null, price: novo.price, qbo_item: novo.qbo_item || null, kind,
+        site_kart: como === 'kart' ? kartEscolhido : como === 'addon' ? chave_addon : null,
+        site_title: como === 'kart' || como === 'addon' ? (novo.site_title || null) : null, site_subtitle: como === 'kart' ? (novo.site_subtitle || null) : null,
+        months: kind === 'plan' ? (novo.months || '1') : null, sessions_month: kind === 'plan' ? (novo.sessions_month || null) : null,
+        extra_price: kind === 'plan' ? (novo.extra_price || null) : null, extra_item: kind === 'plan' ? (novo.extra_item || null) : null,
+        deposit: sessao ? (novo.deposit || null) : null, deposit_required: sessao && novo.deposit_required })
+      toast(kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : como === 'addon' ? tr("Add-on criado: já aparece na reserva do Arrive and Drive.")
+        : como === 'kart' ? tr("Serviço criado: o kart já aparece no Arrive and Drive.") : tr("Serviço criado: o cliente já vê."), 'ok')
+      setNovo(vazio); recarregar()
+    } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  const pg = paginas.find(p => p.id === pagina)
+  return <div className="stack" style={{ gap: 14 }}>
+    <div className="ins-passo"><span id={`${id}-pg`} className="ins-passo-rot">{tr("Em qual página do site?")}</span>
+      <div className="seg" role="radiogroup" aria-labelledby={`${id}-pg`}>{opcoes.map(o =>
+        <button key={o.id} type="button" role="radio" aria-checked={pagina === o.id} className={`btn sm${pagina === o.id ? '' : ' ghost'}`} onClick={() => escolher(o.id)}>{o.nome}</button>)}</div></div>
+    {pagina && COMO_DA_PAGINA[pagina].length > 1 && <div className="ins-passo"><span id={`${id}-como`} className="ins-passo-rot">{tr("Como ele entra na página?")}</span>
+      <div className="seg" role="radiogroup" aria-labelledby={`${id}-como`}>{COMO_DA_PAGINA[pagina].map(k =>
+        <button key={k} type="button" role="radio" aria-checked={como === k} className={`btn sm${como === k ? '' : ' ghost'}`} onClick={() => setComo(k)}>{NOME_COMO[k]}</button>)}</div></div>}
+    {pagina && <div className="ins-onde">
+      <p>{pg ? <>{tr("Hoje em")} <b>{pg.nome}</b>: </> : <>{tr("Hoje só na área do cliente:")} </>}
+        {hoje.length ? hoje.join(' · ') : (pg?.cartoes && c.loading ? '…' : tr("nada ainda"))}
+        {escondePlano && cartoesDaPagina.length > 0 && <span className="ins-escondido"> · {tr("escondidos pelo plano ativo: {0}", cartoesDaPagina.map(rotuloCartao).join(', '))}</span>}</p>
+      {pg && <a className="btn sm ghost" href={pg.caminho} target="_blank" rel="noreferrer" aria-label={tr("Abrir {0} no site", pg.nome)}>{tr("Ver no site ↗")}</a>}
+    </div>}
+    {como === 'cartao' && <>
+      {pagina === 'academy' && temPlano && <Banner tone="warn">{tr("Com plano ativo, a Academy mostra os planos no lugar dos cartões: este cartão só aparece quando nenhum plano estiver ativo.")}</Banner>}
+      {c.data ? <FormCartao paginas={c.data.paginas} pagina={pagina} precoKart={c.data.preco_kart} onCriado={c.reload} />
+        : c.error ? <ErrorState error={c.error} retry={c.reload} /> : <Loading />}</>}
+    {como && como !== 'cartao' && <>
+      {como === 'plano' && <p className="small muted" style={{ margin: 0 }}>{tr("Com plano ativo, a Academy mostra os planos do painel no lugar dos cartões.")}</p>}
+      {como === 'addon' && addonHoje.length > 0 && <Banner tone="warn">{tr("A reserva já vende o add-on {0}. Dois tiram a caixa do site: desative aquele na lista antes de criar outro.", addonHoje.map(s => s.name).join(', '))}</Banner>}
+      <div className="site-servico">
+        <label className="fld"><span>{tr("Nome")}</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder={como === 'addon' ? 'Lead and Follow' : tr("Arrive and Drive")} /></label>
+        <label className="fld"><span>{como === 'addon' ? tr("Texto da caixa na reserva") : tr("Descrição")} <i>{tr("opcional")}</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
+        <label className="fld"><span>{kind === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
+        {kind === 'plan' && <>
+          <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={novo.months} onChange={x => setNovo({ ...novo, months: x.target.value })} placeholder="3" /></label>
+          <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label>
+          <label className="fld"><span>{tr("Valor da sessão extra (US$)")} <i>{tr("vazio = mensal ÷ sessões")}</i></span><input inputMode="decimal" value={novo.extra_price} onChange={x => setNovo({ ...novo, extra_price: x.target.value })} /></label>
+          <label className="fld"><span>{tr("Item da sessão extra")} <i>{tr("vazio = o \"Extra session\" do QuickBooks")}</i></span><input list="itens-qbo" value={novo.extra_item} placeholder={tr("escolha da lista")}
+            onChange={x => setNovo({ ...novo, extra_item: x.target.value })} /></label></>}
+        <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
+          onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
+        {sessao && <>
+          <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{novo.deposit_required ? tr("obrigatório") : tr("0 = sem")}</i></span>
+            <input inputMode="decimal" value={novo.deposit} placeholder="400.00" onChange={x => setNovo({ ...novo, deposit: x.target.value })} /></label>
+          <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={novo.deposit_required}
+            onChange={x => setNovo({ ...novo, deposit_required: x.target.checked })} /> {tr("Security deposit obrigatório")}</label></>}
+        {como === 'kart' && <>
+          <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
+            <select value={novo.site_kart} onChange={x => setNovo({ ...novo, site_kart: x.target.value })}>
+              <option value="">{tr("escolha o kart")}</option>
+              {karts.map(k => { const d = donoDoKart(k)
+                return <option key={k} value={k} disabled={!!d.length}>{d.length ? tr("{0} · hoje: {1}", k, d.map(s => s.name).join(', ')) : k}</option> })}
+              <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>
+          {novo.site_kart === NOVO_KART &&
+            <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={novo.kart_novo} placeholder="Rental 2-stroke Pro"
+              onChange={x => setNovo({ ...novo, kart_novo: x.target.value })} /></label>}</>}
+        {(como === 'kart' || como === 'addon') && <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>}
+        {como === 'kart' && <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
+          onChange={x => setNovo({ ...novo, site_subtitle: x.target.value })} /></label>}
+        <button className="btn sm primary" disabled={!pode} onClick={criar}>{tr("Criar")}</button>
+      </div>
+      {como === 'kart' && !!kartEscolhido && donoDoKart(kartEscolhido).length > 0 && <p className="small" style={{ margin: 0, color: 'var(--crit)' }}>{tr("Esse kart já tem serviço ativo.")}</p>}
+      {como === 'kart' && <p className="small muted" style={{ margin: 0 }}>{tr("O kart que já tem serviço ativo fica bloqueado: dois serviços com o mesmo kart tiram o kart do site. Para trocar o serviço de um kart, desative o de hoje na lista.")}</p>}
+      <p className="small muted" style={{ margin: 0 }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")} {tr("O nome no site, a linha de baixo e o aviso são o que o cartão do kart mostra; vazio volta ao texto de sempre. \"Novo kart…\" cria um kart a mais na página, com o preço e o depósito deste serviço.")}</p>
+    </>}
+  </div>
+}
+
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
 function Servicos() {
   const { can } = useAuth()
   const gerente = can('MANAGER')
   const toast = useToast()
-  const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  // #317 (dono, 16/10): "o serviço que eu coloquei no checkout ia permitir que eu fizesse o checkout … sem o security
-  // deposit". A sessão nova já nasce com o depósito obrigatório marcado: sem valor, não salva.
-  const vazio = { name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '',
-    deposit: '', deposit_required: true, extra_price: '', extra_item: '' }
-  const [novo, setNovo] = useState(vazio)
+  const l = useGet<ListaServicos>('/site/servicos')
   type Edicao = Partial<Omit<Servico, 'own_kart'>> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string
     extra_txt?: string; extra_item?: string
     kart_novo?: string; own_kart?: boolean }
   const [edit, setEdit] = useState<Record<number, Edicao>>({})
   const itens = l.data?.itens_qbo || []
-  async function criar() {
-    const { kart_novo, ...resto } = novo
-    try { await api.post('/site/servicos', { ...resto, description: novo.description || null, qbo_item: novo.qbo_item || null,
-      site_kart: novo.site_kart === NOVO_KART ? kart_novo : (novo.site_kart || null),
-      site_title: novo.site_title || null, site_subtitle: novo.site_subtitle || null,
-      months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null,
-      extra_price: novo.kind === 'plan' ? (novo.extra_price || null) : null, extra_item: novo.kind === 'plan' ? (novo.extra_item || null) : null,
-      deposit: novo.kind === 'session' ? (novo.deposit || null) : null, deposit_required: novo.kind === 'session' && novo.deposit_required })
-      toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
-      setNovo(vazio); l.reload() }
-    catch (e) { toast((e as ApiError).message, 'crit') }
-  }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
     const e = edit[sv.id] || {}
     const corpo: Record<string, unknown> = { ...extra }
@@ -330,15 +464,25 @@ function Servicos() {
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
   const muda = (id: number, x: Edicao) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  /** #312 (revisão): os outros serviços ATIVOS do mesmo tipo com esta chave (a mesma regra do servidor e da página) */
+  const outrosComChave = (sv: Servico, chave: string | null | undefined, kind: string) => chaveDe(chave) && (kind === 'session' || kind === 'addon')
+    ? l.data!.servicos.filter(o => o.id !== sv.id && o.active && (o.kind ?? 'session') === kind && chaveDe(o.site_kart) === chaveDe(chave)) : []
   // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
   const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
+    {/* #312 (dono, 16/10): "um botão de adicionar novo serviço e a gente escolhe em qual página que esse serviço vai
+        estar, e aí abra essa seção". Fica no topo, antes da lista, que cresce. */}
+    {gerente && <InserirNoTopo rotulo={tr("Adicionar serviço")} titulo={tr("Novo serviço")} primario inicial={!l.data.servicos.length}>
+      <NovoServico dados={l.data} recarregar={l.reload} />
+    </InserirNoTopo>}
     {!l.data.servicos.some(x => x.active) && <div className="banner warn"><span className="bi">▲</span><div className="grow">{tr("Nenhum serviço ativo: o cliente")} <b>{tr("não consegue marcar")}</b> {tr("até haver pelo menos um, com preço.")}</div></div>}
     {sugestoes}
     <Section title={tr("Serviços")} count={l.data.servicos.length}>
-      {!l.data.servicos.length ? <Empty title={tr("Nenhum serviço ainda")}>{tr("Cadastre abaixo o que o cliente pode marcar e o preço de cada um.")}</Empty>
+      {!l.data.servicos.length ? <Empty title={tr("Nenhum serviço ainda")}>{tr("Use \"Adicionar serviço\", em cima, para cadastrar o que o cliente pode marcar e o preço de cada um.")}</Empty>
         : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
           const e = edit[sv.id] || {}
+          // #312 (revisão): reativar não pode deixar dois ativos com a mesma chave (o kart ou a caixa do add-on sairia do site)
+          const conflito = sv.active ? [] : outrosComChave(sv, sv.site_kart, sv.kind ?? 'session')
           return <div key={sv.id} className="card card-b">
             <div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
@@ -366,7 +510,8 @@ function Servicos() {
                 <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
                   <select value={e.site_kart ?? sv.site_kart ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { site_kart: x.target.value })}>
                     <option value="">{tr("não é do site")}</option>
-                    {opcoesDeKart(sv.site_kart).map(k => <option key={k} value={k}>{k}</option>)}
+                    {opcoesDeKart(sv.site_kart).map(k => { const d = sv.active ? outrosComChave(sv, k, 'session') : []
+                      return <option key={k} value={k} disabled={!!d.length}>{d.length ? tr("{0} · hoje: {1}", k, d.map(o => o.name).join(', ')) : k}</option> })}
                     <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>}
               {(e.site_kart ?? sv.site_kart) === NOVO_KART &&
                 <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={e.kart_novo ?? ''} disabled={!gerente} placeholder="Rental 2-stroke Pro"
@@ -384,55 +529,18 @@ function Servicos() {
                     onChange={x => muda(sv.id, { own_kart: x.target.checked })} /> {tr("O cliente traz o próprio kart")}</label></>}</>}
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
-                <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
+                <button className="btn sm ghost" disabled={!!conflito.length} onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button>
+                {conflito.length > 0 && <span className="small" style={{ color: 'var(--warn)' }}>{tr("Para reativar, desative antes \"{0}\": ele já usa a chave {1}.", conflito.map(o => o.name).join(', '), sv.site_kart || '')}</span>}</div>}
             </div>
-            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : sv.kind === 'addon' ? tr("add-on na reserva do site") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
+            <div className="small muted" style={{ marginTop: 6 }}><OndeNoSite n={sv.no_site} paginas={l.data!.paginas} />
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
               {sv.kind === 'plan' && <> · <span>{tr("sessão extra")} {sv.extra_price != null ? usd(sv.extra_price) : tr("= mensal ÷ sessões")}</span></>}
-              {sv.site_kart && <> · <Chip tone="ok">{tr("vende o {0} no site", sv.site_kart)}</Chip></>}
               {(sv.kind ?? 'session') === 'session' && (sv.deposit_required ? <> · <Chip tone="ok">{tr("depósito obrigatório")}</Chip></>
                 : !(sv.deposit ?? 0) ? <> · <Chip tone="warn">{tr("sem security deposit")}</Chip></> : null)}
               {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: o site cobra pelo Stripe; a invoice da equipe pede a linha")}</span></>}</div>
           </div>
         })}</div>}
     </Section>
-    {gerente && <Section title={tr("Novo serviço")}>
-      <div className="card card-b"><div className="site-servico">
-        <label className="fld"><span>{tr("Nome")}</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder={tr("Arrive and Drive")} /></label>
-        <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
-        <label className="fld"><span>{tr("Tipo")}</span><select value={novo.kind} onChange={x => setNovo({ ...novo, kind: x.target.value })}>
-          <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option></select></label>
-        <label className="fld"><span>{novo.kind === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
-        {novo.kind === 'plan' && <>
-          <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={novo.months} onChange={x => setNovo({ ...novo, months: x.target.value })} placeholder="3" /></label>
-          <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label>
-          <label className="fld"><span>{tr("Valor da sessão extra (US$)")} <i>{tr("vazio = mensal ÷ sessões")}</i></span><input inputMode="decimal" value={novo.extra_price} onChange={x => setNovo({ ...novo, extra_price: x.target.value })} /></label>
-          <label className="fld"><span>{tr("Item da sessão extra")} <i>{tr("vazio = o \"Extra session\" do QuickBooks")}</i></span><input list="itens-qbo" value={novo.extra_item} placeholder={tr("escolha da lista")}
-            onChange={x => setNovo({ ...novo, extra_item: x.target.value })} /></label></>}
-        <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
-          onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
-        {novo.kind === 'session' && <>
-          <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{novo.deposit_required ? tr("obrigatório") : tr("0 = sem")}</i></span>
-            <input inputMode="decimal" value={novo.deposit} placeholder="400.00" onChange={x => setNovo({ ...novo, deposit: x.target.value })} /></label>
-          <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={novo.deposit_required}
-            onChange={x => setNovo({ ...novo, deposit_required: x.target.checked })} /> {tr("Security deposit obrigatório")}</label></>}
-        {novo.kind === 'session' &&
-          <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
-            <select value={novo.site_kart} onChange={x => setNovo({ ...novo, site_kart: x.target.value })}>
-              <option value="">{tr("não é do site")}</option>
-              {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}
-              <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>}
-        {novo.kind === 'session' && novo.site_kart === NOVO_KART &&
-          <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={novo.kart_novo} placeholder="Rental 2-stroke Pro"
-            onChange={x => setNovo({ ...novo, kart_novo: x.target.value })} /></label>}
-        {novo.kind === 'session' && novo.site_kart && <>
-          <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>
-          <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
-            onChange={x => setNovo({ ...novo, site_subtitle: x.target.value })} /></label></>}
-        <button className="btn sm primary" disabled={!novo.name || !novo.price || (novo.kind === 'session' && novo.deposit_required && !(Number(novo.deposit.replace(/[$,\s]/g, '')) > 0))} onClick={criar}>{tr("Criar")}</button>
-      </div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")} {tr("O nome no site, a linha de baixo e o aviso são o que o cartão do kart mostra; vazio volta ao texto de sempre. \"Novo kart…\" cria um kart a mais na página, com o preço e o depósito deste serviço.")}</p>
-    </Section>}
   </div>
 }
 
@@ -449,7 +557,6 @@ function Cartoes() {
   const toast = useToast()
   const l = useGet<{ cartoes: Cartao[]; paginas: Record<string, string>; preco_kart: number }>('/site/cartoes')
   const [edit, setEdit] = useState<Record<number, Partial<Cartao>>>({})
-  const [novo, setNovo] = useState<Partial<Cartao>>({ page: 'academy', title: '', price: '' })
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
   const { cartoes, paginas } = l.data
@@ -466,16 +573,14 @@ function Cartoes() {
     try { await api.patch(`/site/cartoes/${c.id}`, { sort: o.sort }); await api.patch(`/site/cartoes/${o.id}`, { sort: c.sort === o.sort ? c.sort + passo : c.sort }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
-  async function criar() {
-    try { await api.post('/site/cartoes', novo); toast(tr("Cartão criado: já aparece na página."), 'ok'); setNovo({ page: novo.page, title: '', price: '' }); l.reload() }
-    catch (er) { toast((er as ApiError).message, 'crit') }
-  }
-  const NOMES: Record<string, string> = { academy: 'Academy', 'pro-team': 'Pro Team', 'for-beginners': 'For Beginners' }
   return <div className="stack" style={{ gap: 18 }}>
+    {/* #312: a inserção fica no topo, antes das três páginas de cartões */}
+    {gerente && <InserirNoTopo rotulo={tr("Adicionar cartão")} titulo={tr("Novo cartão")} primario>
+      <FormCartao paginas={paginas} precoKart={l.data.preco_kart} onCriado={l.reload} /></InserirNoTopo>}
     <p className="small muted" style={{ margin: 0 }}>{tr("No preço, {kart} vira o menor preço de kart do painel (hoje {0}); {academy} e {boost}, o plano do painel. Esconder tira da página sem apagar. Página sem cartão ativo volta ao texto de sempre.", `$${l.data.preco_kart}`)}</p>
     {Object.keys(paginas).map(pg => {
       const lista = cartoes.filter(c => c.page === pg)
-      return <Section key={pg} title={NOMES[pg] || pg} count={lista.filter(c => c.active).length}
+      return <Section key={pg} title={NOMES_CARTAO[pg] || pg} count={lista.filter(c => c.active).length}
         right={<a className="btn sm ghost" href={paginas[pg]} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}>
         <div className="stack" style={{ gap: 10 }}>{lista.map(c => {
           const e = edit[c.id] || {}
@@ -496,17 +601,32 @@ function Cartoes() {
         })}</div>
       </Section>
     })}
-    {gerente && <Section title={tr("Novo cartão")}>
-      <div className="card card-b"><div className="site-servico">
-        <label className="fld"><span>{tr("Página")}</span><select value={novo.page} onChange={x => setNovo({ ...novo, page: x.target.value })}>
-          {Object.keys(paginas).map(pg => <option key={pg} value={pg}>{NOMES[pg] || pg}</option>)}</select></label>
-        {CAMPOS_CARTAO.map(([k, rot, dica]) => <label key={k} className="fld"><span>{tr(rot)} {dica && <i>{tr(dica)}</i>}</span>
-          <input value={String(novo[k] ?? '')} onChange={x => setNovo({ ...novo, [k]: x.target.value })} /></label>)}
-        <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Texto")}</span>
-          <textarea rows={3} value={novo.body ?? ''} onChange={x => setNovo({ ...novo, body: x.target.value })} /></label>
-        <button className="btn sm primary" disabled={!novo.title} onClick={criar}>{tr("Criar")}</button>
-      </div></div>
-    </Section>}
+  </div>
+}
+
+const NOMES_CARTAO: Record<string, string> = { academy: 'Academy', 'pro-team': 'Pro Team', 'for-beginners': 'For Beginners' }
+
+/* #312: o formulário do cartão novo — o mesmo em Cartões das páginas e no "Adicionar serviço" (com a página já
+ * escolhida, `pagina`). Cria do mesmo jeito de antes: POST /site/cartoes, e a página do site já mostra. */
+function FormCartao({ paginas, pagina, precoKart, onCriado }: { paginas: Record<string, string>; pagina?: string; precoKart: number; onCriado: () => void }) {
+  const toast = useToast()
+  const [novo, setNovo] = useState<Partial<Cartao>>({ page: pagina || 'academy', title: '', price: '' })
+  const corpo = { ...novo, page: pagina || novo.page }
+  async function criar() {
+    try { await api.post('/site/cartoes', corpo); toast(tr("Cartão criado: já aparece na página."), 'ok'); setNovo({ page: corpo.page, title: '', price: '' }); onCriado() }
+    catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  return <div className="stack" style={{ gap: 10 }}>
+    <div className="site-servico">
+      {!pagina && <label className="fld"><span>{tr("Página")}</span><select value={novo.page} onChange={x => setNovo({ ...novo, page: x.target.value })}>
+        {Object.keys(paginas).map(pg => <option key={pg} value={pg}>{NOMES_CARTAO[pg] || pg}</option>)}</select></label>}
+      {CAMPOS_CARTAO.map(([k, rot, dica]) => <label key={k} className="fld"><span>{tr(rot)} {dica && <i>{tr(dica)}</i>}</span>
+        <input value={String(novo[k] ?? '')} onChange={x => setNovo({ ...novo, [k]: x.target.value })} /></label>)}
+      <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Texto")}</span>
+        <textarea rows={3} value={novo.body ?? ''} onChange={x => setNovo({ ...novo, body: x.target.value })} /></label>
+      <button className="btn sm primary" disabled={!novo.title} onClick={criar}>{tr("Criar")}</button>
+    </div>
+    {pagina && <p className="small muted" style={{ margin: 0 }}>{tr("No preço, {kart} vira o menor preço de kart do painel (hoje {0}); {academy} e {boost}, o plano do painel. Esconder tira da página sem apagar. Página sem cartão ativo volta ao texto de sempre.", `$${precoKart}`)}</p>}
   </div>
 }
 
