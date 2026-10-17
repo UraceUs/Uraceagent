@@ -493,15 +493,25 @@ function Cartoes() {
  * expirou, no checkout), cada um com o link da página do pedido para mandar ao cliente. */
 interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
   pago_em: string | null; nome: string | null; email: string | null; telefone: string | null; resumo: string; opp_id: number | null
-  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null }
+  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null
+  sem_estoque?: boolean; estoque?: { linha: string; nota: string }[] }
 const POR_PAGINA_PEDIDOS = 30
 
 function Pedidos() {
   const toast = useToast()
+  const perguntar = usePerguntar()
+  const [resolvendo, setResolvendo] = useState(0)
   const [filtro, setFiltro] = useState('')
   const [offset, setOffset] = useState(0)
   const l = useGet<{ pedidos: PedidoLista[]; total: number }>(`/site/pedidos?limit=${POR_PAGINA_PEDIDOS}&offset=${offset}${filtro ? `&status=${filtro}` : ''}`, 30000)
   const copiar = (p: PedidoLista) => navigator.clipboard?.writeText(p.link).then(() => toast(tr("Link do pedido copiado: mande ao cliente."), 'ok'))
+  // #309 (revisão): o "sem estoque" resolvido sai do pedido e do "Pagos sem estoque" do Painel do site
+  async function resolvido(p: PedidoLista) {
+    if (!await perguntar({ titulo: tr("O sem estoque do pedido #{0} está resolvido?", p.id), texto: tr("Use quando a peça foi separada, o cliente combinou outro prazo ou o valor foi devolvido pelo Stripe. A frase continua no pedido e na auditoria."), ok: tr("Resolvido") })) return
+    setResolvendo(p.id)
+    try { await api.post(`/site/pedidos/${p.id}/estoque-resolvido`); toast(tr("Resolvido: saiu do Painel do site."), 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setResolvendo(0) }
+  }
   return <>
     <div className="seg" style={{ marginBottom: 12, flexWrap: 'wrap' }}>{([['', tr("Todos")], ['pago', tr("Pagos")], ['aguardando', tr("Processando")], ['falhou', tr("Não passou")], ['expirado', tr("Expirou")], ['aberto', tr("No checkout")]] as const).map(([k, r]) =>
       <button key={k || 'todos'} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => { setFiltro(k); setOffset(0) }}>{r}</button>)}</div>
@@ -517,8 +527,12 @@ function Pedidos() {
         <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}{p.idioma === 'pt' ? tr(" · comprou em português") : ''}</div>
         {p.status !== 'aberto' && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
           : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
-        {p.atencao && <div className="small" style={{ color: 'var(--crit)' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
+        {p.atencao && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
+        {/* #309: o que a venda tirou do estoque, para separar exatamente aquilo (no kart usado e no motor, o serial) */}
+        {(p.estoque || []).map((x, i) => <div key={i} className="small" style={{ overflowWrap: 'anywhere' }}><b>{tr("Estoque:")}</b> {x.linha ? `${x.linha}: ` : ''}{x.nota}</div>)}
         <div className="row wrap" style={{ gap: 8 }}>
+          {p.sem_estoque && <button className="btn sm" disabled={resolvendo === p.id} onClick={() => resolvido(p)}
+            aria-label={tr("Resolvido: sem estoque do pedido #{0}", p.id)}>{tr("Resolvido")}</button>}
           <a className="btn sm ghost" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
           <button className="btn sm ghost" onClick={() => copiar(p)}>{tr("Copiar o link")}</button>
           {p.opp_id && <Link className="btn sm ghost" to={`/sales/${p.opp_id}`}>{tr("Venda")}</Link>}</div>
@@ -682,6 +696,8 @@ const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: 
 const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.SitePainel })))
 /* #317: o security deposit (devolver pelo Stripe e o valor cobrado), em arquivo próprio. */
 const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default: m.SiteDepositos })))
+/* #309: o estoque do site (dropshipping ou em estoque, ligado ao estoque do box), em arquivo próprio. */
+const EstoqueDoSite = lazy(() => import('./EstoqueDoSite').then(m => ({ default: m.EstoqueDoSite })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
 const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
 /* #172: o blog do site (o OPERATOR escreve, o ADMIN publica), em arquivo próprio. */
@@ -698,6 +714,7 @@ const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] 
   { aba: 'servicos', to: '/site/servicos', rotulo: tr("Serviços e preços") },
   { aba: 'cartoes', to: '/site/cartoes', rotulo: tr("Cartões das páginas") },
   { aba: 'produtos', to: '/site/produtos', rotulo: tr("Produtos da loja") },
+  { aba: 'estoque', to: '/site/estoque', rotulo: tr("Estoque do site") },        // #309
   { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
   { aba: 'blog', to: '/site/blog', rotulo: tr("Blog") },                         // #172
   { aba: 'contas', to: '/site/contas', rotulo: tr("Contas de clientes") },
@@ -711,7 +728,7 @@ export function SitePublico() {
   const subs = SUBSECOES.filter(s => !s.min || can(s.min))
   const atual = subs.find(s => s.aba === (aba || '')) || subs[0]
   return <>
-    <PageHeader eyebrow={tr("Site")} title={atual.rotulo} help={<>{tr("Tudo o que é do site público: os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, as contas e a waiver. O cliente usa a área do cliente em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>.</>}>
+    <PageHeader eyebrow={tr("Site")} title={atual.rotulo} help={<>{tr("Tudo o que é do site público: os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja e o estoque dela, o editor, as contas e a waiver. O cliente usa a área do cliente em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>.</>}>
       <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">{tr("Abrir a área do cliente ↗")}</a>
     </PageHeader>
     <nav className="tabs" aria-label={tr("Subseções do site")}>
@@ -719,6 +736,7 @@ export function SitePublico() {
     </nav>
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
       : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
+      : atual.aba === 'estoque' ? <Suspense fallback={<Loading />}><EstoqueDoSite key={id || ''} produto={id} /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
       : atual.aba === 'blog' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarArtigo key={id} id={Number(id)} /> : <ArtigosDoBlog />}</Suspense>
       : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>

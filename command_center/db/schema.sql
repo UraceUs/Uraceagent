@@ -1791,6 +1791,21 @@ CREATE TABLE IF NOT EXISTS store_products (
 );
 CREATE INDEX IF NOT EXISTS store_products_vitrine ON store_products(active, sort, id);
 
+-- #309 (dono, 16/10): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque para poder enviar …
+-- o que tiver em estoque a gente coloca quanto que tem". O marcador fica em `store_products.fulfillment` (migração) e
+-- o cliente nunca vê. O produto "em estoque" (ou cada opção dele: '' = produto sem opção) liga a UM item do estoque
+-- interno: um saldo só, o mesmo do Balcão, da contagem e de Compras. Um item vende no site por um produto só.
+CREATE TABLE IF NOT EXISTS store_product_stock (
+  id          INTEGER PRIMARY KEY,
+  product_id  INTEGER NOT NULL REFERENCES store_products(id),
+  variation   TEXT NOT NULL DEFAULT '',             -- o nome da opção (" / ".join(attrs)); '' = produto sem opção
+  item_id     INTEGER NOT NULL REFERENCES stock_items(id),
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (product_id, variation),
+  UNIQUE (item_id)
+);
+
 -- #300 (dono, 16/10): o editor visual do site, livre tipo Elementor. Cada página do editor tem o rascunho e o que
 -- está publicado (JSON do modelo de `vitrine/editor.py`: seções, colunas e elementos; nunca HTML solto). Página nova
 -- (`base` NULL) ganha o endereço dela; página que já existe no site (`base` = o caminho dela) é servida pelo editor

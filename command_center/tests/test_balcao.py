@@ -397,3 +397,21 @@ def test_cartao_no_gopayment_paga_a_invoice_e_a_proxima_peca_abre_outra(cli, mon
     r = lanca(cli, h, cli.para)
     ids = {i["id"] for i in r.json()["invoices"]}
     assert len(ids) == 2 and inv["id"] in ids
+
+
+# ------------------------------------------------------------------ #309: um saldo só com a loja do site
+def test_venda_no_balcao_de_peca_ligada_deixa_o_produto_do_site_out_of_stock(cli):
+    """#309: a peça ligada a um produto da loja do site sai pelo Balcão, e o site já mostra "Out of stock": o Balcão,
+    a contagem e o site mexem no mesmo número."""
+    from command_center.providers import estoque_site, loja
+    con = conectar()
+    p = next(x for x in loja.catalogo(con) if not x["variations"] and x["price"] and x["in_stock"])
+    estoque_site.ligar(con, None, p["id"], "", item_id=cli.para, contagem=1)
+    con.commit(); con.close()
+    assert next(x for x in loja.catalogo(conectar()) if x["id"] == p["id"])["in_stock"]
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    assert lanca(cli, h, cli.para).status_code == 201
+    con = conectar()
+    assert not next(x for x in loja.catalogo(con) if x["id"] == p["id"])["in_stock"], "vendeu a última no Balcão"
+    assert estoque.conferir(con) == []
