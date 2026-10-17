@@ -30,7 +30,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from command_center.api import acoes_painel, atencao, auth, mcp_operar, vendas  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos, um  # noqa: E402
-from command_center.providers import identidade  # noqa: E402
+from command_center.providers import NaoConectado, identidade  # noqa: E402
 
 B = "/ops/api"
 SENHA = "senha-forte-123"
@@ -55,18 +55,41 @@ def cli():
         yield c
 
 
+class QBORecusou(Exception):
+    """O QuickBooks recusou a invoice (HTTP 400): nada foi criado, e o botão pode tentar de novo (#310, A1)."""
+    nada_saiu = True
+
+
 class QBOFalso:
+    """O QuickBooks de mentira: anota cada invoice criada e, como o de verdade, devolve a resposta original
+    quando a mesma `requestid` se repete (não cria a segunda, #310 A1)."""
+
     def __init__(self):
-        self.invoices = []
+        self.invoices, self.reenvios, self.por_requestid = [], [], {}
+
+    def _resposta(self, i):
+        n = 1001 + i
+        return {"id": str(n), "numero": str(n), "total": sum(l["unitario"] for l in self.invoices[i]["linhas"]), "enviado": True}
 
     def __call__(self, sistema, ferramenta, **kw):
         assert sistema == "quickbooks", sistema
         if ferramenta == "qbo_clientes_buscar":
             return [{"id": "77", "nome": "cliente"}]
         if ferramenta == "qbo_criar_e_enviar_invoice":
+            if kw.get("requestid") in self.por_requestid:
+                return self._resposta(self.por_requestid[kw["requestid"]])
             self.invoices.append(kw)
-            n = 1000 + len(self.invoices)
-            return {"id": str(n), "numero": str(n), "total": sum(l["unitario"] for l in kw["linhas"]), "enviado": True}
+            if kw.get("requestid"):
+                self.por_requestid[kw["requestid"]] = len(self.invoices) - 1
+            return self._resposta(len(self.invoices) - 1)
+        if ferramenta == "invoice_por_numero":
+            i = int(kw["numero"]) - 1001 if str(kw["numero"]).isdigit() else -1
+            if not 0 <= i < len(self.invoices):
+                return None
+            return {**self._resposta(i), "cliente_id": self.invoices[i]["cliente_id"], "cliente": "cliente"}
+        if ferramenta == "qbo_enviar_invoice":
+            self.reenvios.append(kw)
+            return {"aplicado": True, "id": kw["id"], "enviado_para": kw.get("email")}
         raise AssertionError(ferramenta)
 
 
@@ -461,11 +484,7 @@ def test_fechar_de_novo_nao_duplica_a_invoice(cli, qbo):
 def test_reenvio_pelo_step_fica_na_auditoria(cli, qbo, monkeypatch):
     """Só o Liberar ia para a auditoria; a invoice mandada pelo botão do passo ficava só na linha
     do tempo da venda."""
-    def fora_do_ar(sistema, ferramenta, **kw):
-        if ferramenta == "qbo_criar_e_enviar_invoice":
-            raise RuntimeError("QuickBooks fora do ar")
-        return qbo(sistema, ferramenta, **kw)
-    monkeypatch.setattr(vendas, "chamar", fora_do_ar)
+    monkeypatch.setattr(vendas, "chamar", _qbo_fora_do_ar(qbo))
     h = entra(cli, "closer@urace.us")
     oid = cria(cli, h, name="Reenvio Auditado", email="reenvio@example.com", amount=500)
     f = fecha(cli, h, oid)
@@ -562,9 +581,10 @@ def _uid(con, email):
 
 
 def _qbo_fora_do_ar(qbo):
+    """O QuickBooks recusa a invoice (nada criado): o passo falha e o "tentar de novo" pode mandar."""
     def fora(sistema, ferramenta, **kw):
         if ferramenta == "qbo_criar_e_enviar_invoice":
-            raise RuntimeError("QuickBooks fora do ar")
+            raise QBORecusou("HTTP 400 em POST /invoice (intuit_tid=x): o QuickBooks recusou")
         return qbo(sistema, ferramenta, **kw)
     return fora
 
@@ -796,14 +816,17 @@ def test_liberar_que_caiu_depois_do_quickbooks_nao_manda_outra_sem_o_gerente_con
         con.close()
     r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
     assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho", r.text
-    # o gerente conferiu no QuickBooks que não saiu e confirma: sai, e fica na auditoria
+    # o gerente confirma "não saiu: mandar": fica na auditoria, e a tentativa antiga ganha o desfecho (A2).
+    # A1: a requestid da pendente vai junto; como ela tinha criado, o QuickBooks devolve a MESMA invoice
     r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300, "confirmar": True})
     assert r.status_code == 200, r.text
-    assert len(qbo.invoices) == 2
+    assert len(qbo.invoices) == 1 and r.json()["resultado"]["invoice"] == "1001", "a requestid repetida não cria outra"
     con = conectar()
     try:
         a = um(con, "SELECT detail FROM audit_logs WHERE event='sales.invoice.release' AND entity_id=?", (str(oid),))
         assert json.loads(a["detail"])["confirmou"] == marca["tentativa"]
+        c = um(con, "SELECT detail FROM audit_logs WHERE event='sales.invoice.confirmed' AND entity_id=?", (str(oid),))
+        assert json.loads(c["detail"])["tentativa"] == marca["tentativa"]
     finally:
         con.close()
 
@@ -835,7 +858,7 @@ def test_reenvio_que_caiu_depois_do_quickbooks_nao_reenvia(cli, qbo, monkeypatch
     assert r.status_code == 403 and len(qbo.invoices) == 1, "quem vende não confirma por cima"
     hg = entra(cli, "ger@urace.us")
     assert cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=hg).status_code == 200
-    assert len(qbo.invoices) == 2 and "cobrando" not in _closing(oid)
+    assert len(qbo.invoices) == 1 and "cobrando" not in _closing(oid), "a requestid da pendente: a mesma invoice"
 
 
 def test_servico_do_site_sem_item_sai_com_o_item_escolhido(cli, qbo):
@@ -877,3 +900,291 @@ def test_nenhum_passo_antes_de_fechar(cli, qbo):
         assert r.status_code == 409 and "Feche a venda antes" in r.json()["detail"], (passo, r.text)
     assert _closing(oid) is None and not qbo.invoices
     assert fecha(cli, h, oid)["passos"][0]["ok"] is True and len(qbo.invoices) == 1
+
+
+# ------------------------------------------------------------------ #310, 2ª revisão: sem resposta (A1) e "a invoice saiu" (A2)
+def _criou_e_nao_respondeu(qbo, erro=None):
+    """O QuickBooks cria a invoice e a resposta não chega (tempo esgotado depois de 60 s)."""
+    def chamar(sistema, ferramenta, **kw):
+        r = qbo(sistema, ferramenta, **kw)
+        if ferramenta == "qbo_criar_e_enviar_invoice":
+            raise erro or TimeoutError("The read operation timed out")
+        return r
+    return chamar
+
+
+def _auditoria(oid, evento):
+    con = conectar()
+    try:
+        return [json.loads(a["detail"] or "{}") for a in
+                todos(con, "SELECT detail FROM audit_logs WHERE event=? AND entity_id=? ORDER BY id", (evento, str(oid)))]
+    finally:
+        con.close()
+
+
+def _cai_ao_gravar(monkeypatch, comeco):
+    """O banco falha DEPOIS do QuickBooks responder, no evento que começa com `comeco`."""
+    orig = vendas._ev
+
+    def ev_cai(con, opp_id, kind, title, *a, **kw):
+        if title.startswith(comeco):
+            raise RuntimeError("database is locked")
+        return orig(con, opp_id, kind, title, *a, **kw)
+    monkeypatch.setattr(vendas, "_ev", ev_cai)
+    return orig
+
+
+def test_criar_e_enviar_separa_recusa_de_sem_resposta(monkeypatch):
+    """A1, no MCP do QuickBooks: só prova que nada foi criado o erro de antes do POST /invoice e a recusa
+    (HTTP 4xx, menos 408 e 429). Tempo esgotado, conexão caída, 5xx, 408 e 429 não provam. Criada a
+    invoice, o envio que falha volta a invoice com `enviado: False`, sem exceção; a `requestid` vai no POST."""
+    from adminai.mcp import quickbooks_mcp as q
+    original = q._req
+    monkeypatch.setattr(q, "_aplicar", lambda: True)
+    monkeypatch.setattr(q, "_proximo_doc_number", lambda: "9999")
+    linhas = [{"item_id": "32", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily"}]
+
+    def falha(codigo=None, exc=None):
+        def req(caminho, metodo="GET", corpo=None, params=None):
+            if exc:
+                raise exc
+            e = q.ErroFerramenta(f"HTTP {codigo} em {metodo} {caminho} (intuit_tid=x): erro")
+            e.http = codigo
+            raise e
+        return req
+    for codigo in (400, 401, 404):
+        monkeypatch.setattr(q, "_req", falha(codigo))
+        with pytest.raises(q.InvoiceNaoCriada) as e:
+            q.qbo_criar_e_enviar_invoice("77", linhas, email="recusa@example.com")
+        assert vendas.nada_saiu(e.value), codigo
+    for erro in [falha(c) for c in (408, 429, 500, 503)] + [falha(exc=TimeoutError("timed out")),
+                                                           falha(exc=q.ErroFerramenta("sem conexão com o QuickBooks: reset"))]:
+        monkeypatch.setattr(q, "_req", erro)
+        with pytest.raises(Exception) as e:
+            q.qbo_criar_e_enviar_invoice("77", linhas, email="semresposta@example.com")
+        assert not vendas.nada_saiu(e.value), e.value
+    # antes do POST: o número da invoice (consulta) ou o token caíram — nada foi criado
+    monkeypatch.setattr(q, "_proximo_doc_number", lambda: (_ for _ in ()).throw(TimeoutError("query timed out")))
+    with pytest.raises(q.InvoiceNaoCriada):
+        q.qbo_criar_e_enviar_invoice("77", linhas)
+    monkeypatch.setattr(q, "_proximo_doc_number", lambda: "9999")
+    monkeypatch.setattr(q, "_req", original)
+    monkeypatch.setattr(q, "_realm", lambda: "1")
+    monkeypatch.setattr(q, "_access_token", lambda: (_ for _ in ()).throw(q.ErroFerramenta("sem refresh token do QuickBooks")))
+    with pytest.raises(q.InvoiceNaoCriada):
+        q.qbo_criar_e_enviar_invoice("77", linhas, numero="1")
+    # criou e o envio falhou: a invoice criada volta, e a requestid foi no POST /invoice
+    pedidos = []
+
+    def req(caminho, metodo="GET", corpo=None, params=None):
+        pedidos.append((metodo, caminho, params))
+        if caminho == "/invoice":
+            return {"Invoice": {"Id": "501", "DocNumber": corpo["DocNumber"], "TotalAmt": 500, "CustomerRef": {"value": "77"}}}
+        e = q.ErroFerramenta(f"HTTP 500 em {metodo} {caminho} (intuit_tid=x): erro interno")
+        e.http = 500
+        raise e
+    monkeypatch.setattr(q, "_req", req)
+    r = q.qbo_criar_e_enviar_invoice("77", linhas, email="criada@example.com", requestid="urace-abc")
+    assert r["enviado"] is False and r["id"] == "501" and r["numero"] == "9999" and "HTTP 500" in r["erro_envio"]
+    assert pedidos[0] == ("POST", "/invoice", {"requestid": "urace-abc"})
+
+
+def test_sem_resposta_do_quickbooks_nao_solta_a_marca(cli, qbo, monkeypatch):
+    """A1: o QuickBooks criou a invoice e a resposta não chegou. A marca saía como se nada tivesse saído,
+    e o próximo clique, de qualquer pessoa, criava e mandava outra. Agora a marca fica (`incerta`), o
+    próximo pedido cai na tentativa sem desfecho, e o "Não saiu: mandar" do gerente leva a mesma
+    `requestid`: se ela tinha criado, o QuickBooks devolve a mesma invoice."""
+    monkeypatch.setattr(vendas, "chamar", _qbo_fora_do_ar(qbo))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Timeout Depois", email="timeoutdepois@example.com", amount=500)
+    fecha(cli, h, oid)                                     # na tabela, mas o QuickBooks recusou no fechamento
+    assert "cobrando" not in _closing(oid), "a recusa prova que nada saiu: a marca sai"
+    monkeypatch.setattr(vendas, "chamar", _criou_e_nao_respondeu(qbo))
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 502 and "pode ter saído" in r.json()["detail"], r.text
+    assert len(qbo.invoices) == 1 and _closing(oid)["cobrando"]["incerta"], "sem resposta: a marca fica"
+    assert _auditoria(oid, "sales.invoice.uncertain") and not [d for d in _auditoria(oid, "sales.invoice.failed")
+                                                               if d["tentativa"] == _closing(oid)["cobrando"]["tentativa"]]
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)  # quem vende clica de novo
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho", r.text
+    assert "não respondeu" in r.json()["detail"]["mensagem"]
+    assert cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=h).status_code == 403
+    assert len(qbo.invoices) == 1
+    hg = entra(cli, "ger@urace.us")
+    r = cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=hg)
+    assert r.status_code == 200 and r.json()["resultado"]["invoice"] == "1001", r.text
+    assert len(qbo.invoices) == 1, "a mesma requestid: o QuickBooks não cria a segunda"
+    envios = _auditoria(oid, "sales.invoice.sending")
+    assert envios[-1]["requestid"] == envios[-2]["requestid"] == qbo.invoices[0]["requestid"]
+    assert _auditoria(oid, "sales.invoice.confirmed")[-1]["tentativa"] == envios[-2]["tentativa"]
+
+
+def test_envio_que_falha_depois_de_criar_grava_a_invoice_e_reenvia_a_mesma(cli, qbo, monkeypatch):
+    """A1, com a função de verdade: o POST /invoice dá certo e o POST /invoice/<id>/send dá HTTP 500.
+    Cada clique criava mais uma invoice no QuickBooks. Agora a venda grava a invoice criada e não
+    enviada; o passo e o fechamento não criam outra, e o Reenviar manda a MESMA."""
+    from adminai.mcp import quickbooks_mcp as q
+    criadas, enviadas, falhar = [], [], [True]
+
+    def req(caminho, metodo="GET", corpo=None, params=None):
+        if caminho == "/invoice" and metodo == "POST":
+            criadas.append((corpo, params))
+            return {"Invoice": {"Id": str(500 + len(criadas)), "DocNumber": corpo["DocNumber"], "TotalAmt": 500,
+                                "CustomerRef": {"value": "77"}, "BillEmail": corpo.get("BillEmail")}}
+        if caminho.endswith("/send"):
+            if falhar[0]:
+                e = q.ErroFerramenta(f"HTTP 500 em POST {caminho} (intuit_tid=x): erro interno")
+                e.http = 500
+                raise e
+            enviadas.append((caminho, params))
+            return {"Invoice": {"Id": "501", "DocNumber": "9999", "TotalAmt": 500, "EmailStatus": "EmailSent"}}
+        if metodo == "GET" and caminho == "/invoice/501":
+            return {"Invoice": {"Id": "501", "DocNumber": "9999", "TotalAmt": 500, "BillEmail": {"Address": "enviocaiu@example.com"}}}
+        raise AssertionError((metodo, caminho))
+    monkeypatch.setattr(q, "_req", req)
+    monkeypatch.setattr(q, "_aplicar", lambda: True)
+    monkeypatch.setattr(q, "_realm", lambda: "9341453113046421")
+    monkeypatch.setattr(q, "_proximo_doc_number", lambda: "9999")
+
+    def chamar(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_clientes_buscar":
+            return [{"id": "77"}]
+        return getattr(q, ferramenta)(**kw)
+    h = entra(cli, "closer@urace.us")
+    monkeypatch.setattr(vendas, "chamar", _qbo_fora_do_ar(qbo))
+    oid = cria(cli, h, name="Envio Caiu", email="enviocaiu@example.com", amount=500)
+    fecha(cli, h, oid)
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 200 and r.json()["resultado"]["enviado"] is False, r.text
+    assert len(criadas) == 1 and criadas[0][1]["requestid"].startswith("urace-")
+    q_ = [p for p in _closing(oid)["passos"] if p["passo"] == "qbo"][0]
+    assert q_["ok"] is True and q_["enviado"] is False and (q_["invoice"], q_["numero"]) == ("501", "9999")
+    assert "criada" in q_["detalhe"] and "reenviar" in q_["detalhe"]
+    d = cli.get(f"{B}/sales/{oid}", headers=h).json()
+    assert d["invoice"] == "enviada" and d["nao_enviadas"] == [{"invoice": "501", "numero": "9999", "o_que": "invoice"}]
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 409 and "Reenviar" in r.json()["detail"], r.text
+    assert cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": SO_QBO}).status_code == 409
+    assert len(criadas) == 1, "nenhum clique cria a segunda"
+    falhar[0] = False
+    r = cli.post(f"{B}/sales/{oid}/invoice/reenviar", headers=h, json={"invoice": "501"})
+    assert r.status_code == 200, r.text
+    assert len(criadas) == 1 and enviadas == [("/invoice/501/send", {"sendTo": "enviocaiu@example.com"})], "a MESMA invoice"
+    q_ = [p for p in _closing(oid)["passos"] if p["passo"] == "qbo"][0]
+    assert q_["enviado"] is True and cli.get(f"{B}/sales/{oid}", headers=h).json()["nao_enviadas"] == []
+    assert cli.post(f"{B}/sales/{oid}/invoice/reenviar", headers=h, json={}).status_code == 409
+    assert _auditoria(oid, "sales.invoice.send")[0]["invoice"] == "501"
+
+
+def test_confirmar_nao_saiu_encerra_a_tentativa_antiga(cli, qbo, monkeypatch):
+    """A2 (a): o "confirmar" punha o `confirmou` só na marca nova; a tentativa antiga ficava sem desfecho, e
+    a venda voltava a perguntar. Agora a confirmação grava o desfecho dela (`sales.invoice.confirmed`), e
+    o `sales.close` grava o `confirmou`."""
+    def nao_chegou(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_criar_e_enviar_invoice":    # a conexão caiu: o painel não sabe se o QuickBooks criou
+            raise ConnectionResetError("Connection reset by peer")
+        return qbo(sistema, ferramenta, **kw)
+    monkeypatch.setattr(vendas, "chamar", nao_chegou)
+    hg = entra(cli, "ger@urace.us")
+    oid = cria(cli, hg, name="Conexao Caiu", email="conexaocaiu@example.com", amount=500)
+    f = fecha(cli, hg, oid)
+    q_ = [p for p in f["passos"] if p["passo"] == "qbo"][0]
+    assert q_["ok"] is False and "não respondeu" in q_["detalhe"] and _closing(oid)["cobrando"]["incerta"]
+    antiga = _closing(oid)["cobrando"]["tentativa"]
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    r = cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho", r.text
+    # o gerente conferiu no QuickBooks: não saiu. Fecha de novo, confirmando
+    r = cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO, "confirmar": True})
+    assert r.status_code == 200 and len(qbo.invoices) == 1, r.text
+    assert _auditoria(oid, "sales.invoice.confirmed")[-1]["tentativa"] == antiga
+    assert _auditoria(oid, "sales.close")[-1]["confirmou"] == antiga
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=hg)
+    assert r.status_code == 409 and "já saiu" in r.json()["detail"], "a tentativa antiga não pergunta mais"
+
+
+def test_fechamento_que_mandou_e_caiu_registra_o_numero_e_nao_cobra_de_novo(cli, qbo, monkeypatch):
+    """A2 (b): o fechamento do gerente mandou a invoice e caiu ao gravar. Conferido no QuickBooks que ela
+    saiu, não havia como dizer isso ao painel: a venda pedia "confira" para sempre, e o único jeito de
+    seguir mandava a segunda. Agora "A invoice saiu": o gerente informa o número, o painel confere no
+    QuickBooks (só leitura) e grava."""
+    hg = entra(cli, "ger@urace.us")
+    oid = cria(cli, hg, name="Fechou E Caiu", email="fechoucaiu@example.com", amount=500)
+    orig = _cai_ao_gravar(monkeypatch, "Venda fechada")
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO})
+    monkeypatch.setattr(vendas, "_ev", orig)
+    assert len(qbo.invoices) == 1 and set(_closing(oid)) == {"cobrando"}
+    tentativa = _closing(oid)["cobrando"]["tentativa"]
+    _vence_a_marca(oid)
+    r = cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho"
+    rota = f"{B}/sales/{oid}/invoice/registrar"
+    assert cli.post(rota, headers=entra(cli, "closer@urace.us"), json={"numero": "1001"}).status_code == 403, "quem vende não"
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(rota, json={"numero": "1001"}).status_code == 403, "sem o CSRF, nada"
+
+    def desligado(sistema, ferramenta, **kw):
+        raise NaoConectado("sem refresh token")
+    monkeypatch.setattr(vendas, "chamar", desligado)
+    r = cli.post(rota, headers=hg, json={"numero": "1001"})
+    assert r.status_code == 503 and "Ligue o QuickBooks" in r.json()["detail"], r.text
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    r = cli.post(rota, headers=hg, json={"numero": "4242"})
+    assert r.status_code == 409 and "não existe" in r.json()["detail"], r.text
+
+    def outro_cliente(sistema, ferramenta, **kw):
+        return [{"id": "88"}] if ferramenta == "qbo_clientes_buscar" else qbo(sistema, ferramenta, **kw)
+    monkeypatch.setattr(vendas, "chamar", outro_cliente)
+    r = cli.post(rota, headers=hg, json={"numero": "1001"})
+    assert r.status_code == 409 and "outro cliente" in r.json()["detail"], r.text
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    assert set(_closing(oid)) == {"cobrando"}, "nada registrado sem conferir"
+    r = cli.post(rota, headers=hg, json={"numero": "1001"})
+    assert r.status_code == 200, r.text
+    f = _closing(oid)
+    q_ = [p for p in f["passos"] if p["passo"] == "qbo"][0]
+    assert (q_["ok"], q_["numero"], q_["registrada"]) == (True, "1001", True) and "cobrando" not in f
+    assert cli.get(f"{B}/sales/{oid}", headers=hg).json()["invoice"] == "enviada"
+    assert cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO}).status_code == 409
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=hg).status_code == 409
+    assert cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=hg).status_code == 409
+    assert len(qbo.invoices) == 1, "nada cobrado de novo"
+    assert _auditoria(oid, "sales.invoice.registered")[0]["tentativa"] == tentativa
+    assert cli.post(rota, headers=hg, json={"numero": "1001"}).status_code == 409, "não há mais o que registrar"
+
+
+def test_liberar_que_mandou_e_caiu_registra_o_numero_e_sai_da_atencao(cli, qbo, monkeypatch):
+    """A2 (b): o Liberar mandou e caiu ao gravar; dias depois a venda continuava "esperando", em Precisa de
+    atenção, e a confirmação só servia para mandar a segunda. O número registrado é conferido: outro
+    valor pede "registrar mesmo assim"."""
+    h = entra(cli, "closer@urace.us")
+    outra = cria(cli, h, name="Outra Venda", email="outravenda@example.com", amount=500)
+    fecha(cli, h, outra)                                   # a invoice 1001, de outra venda do mesmo cliente no QuickBooks
+    oid = cria(cli, h, name="Liberou E Caiu", email="liberoucaiu@example.com", amount=300)
+    fecha(cli, h, oid)
+    hg = entra(cli, "ger@urace.us")
+    orig = _cai_ao_gravar(monkeypatch, "Invoice liberada")
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    monkeypatch.setattr(vendas, "_ev", orig)
+    _vence_a_marca(oid, minutos=60 * 24 * 3)               # três dias depois
+    assert cli.get(f"{B}/sales/{oid}", headers=hg).json()["invoice"] == "esperando" and _na_atencao(oid)
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho"
+    rota = f"{B}/sales/{oid}/invoice/registrar"
+    r = cli.post(rota, headers=hg, json={"numero": "1001"})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "valor_diferente", r.text
+    qbo.invoices[1]["linhas"][0]["unitario"] = 290.0      # a invoice foi editada no QuickBooks depois
+    r = cli.post(rota, headers=hg, json={"numero": "#1002"})
+    assert r.status_code == 409 and "$290" in r.json()["detail"]["mensagem"], r.text
+    r = cli.post(rota, headers=hg, json={"numero": "1002", "aceitar_diferenca": True})
+    assert r.status_code == 200 and "$290" in r.json()["aviso"], r.text
+    f = _closing(oid)
+    assert f["liberada"]["por"] == "Gina Gerente" and f["invoice_pendente"] is False and "cobrando" not in f
+    assert cli.get(f"{B}/sales/{oid}", headers=hg).json()["invoice"] == "enviada" and not _na_atencao(oid)
+    assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300, "confirmar": True}).status_code == 409
+    assert len(qbo.invoices) == 2, "a de outra venda e a liberada: nenhuma a mais"
+    assert _auditoria(oid, "sales.invoice.registered")[0]["diferente"] is True
