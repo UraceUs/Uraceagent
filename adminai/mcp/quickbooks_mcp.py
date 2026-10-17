@@ -130,12 +130,31 @@ def _realm():
     return _ler_token().get("realm_id") or os.environ["QBO_REALM_ID"]
 
 
+class InvoiceNaoCriada(ErroFerramenta):
+    """A invoice NÃO foi criada, com certeza: o erro veio antes do POST /invoice (token, número) ou o
+    QuickBooks recusou o pedido (HTTP 4xx, menos 408 e 429). Quem chamou pode tentar de novo sem
+    conferir (#310). Qualquer outro erro no POST (tempo esgotado, conexão caída, 5xx, 408, 429) não
+    prova nada: a invoice pode ter sido criada."""
+    nada_saiu = True
+
+
+def _recusada(e):
+    """O QuickBooks respondeu e recusou (4xx), sem criar: 408 e 429 não provam que não criou."""
+    codigo = getattr(e, "http", None)
+    return codigo is not None and 400 <= codigo < 500 and codigo not in (408, 429)
+
+
 def _req(caminho, metodo="GET", corpo=None, params=None):
     q = dict(params or {}); q["minorversion"] = MINOR
     url = f"{API}/{_realm()}{caminho}?{urllib.parse.urlencode(q)}"
     dados = json.dumps(corpo).encode() if corpo is not None else None
     req = urllib.request.Request(url, data=dados, method=metodo)
-    req.add_header("Authorization", f"Bearer {_access_token()}")
+    try:
+        token = _access_token()
+    except ErroFerramenta as e:
+        e.antes_do_envio = True          # nada foi ao QuickBooks (#310)
+        raise
+    req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/json")
     if dados is not None:
         req.add_header("Content-Type", "application/json")
@@ -147,7 +166,9 @@ def _req(caminho, metodo="GET", corpo=None, params=None):
         # intuit_tid: o id que o suporte da Intuit pede para rastrear a chamada
         tid = e.headers.get("intuit_tid") if e.headers else None
         log("QBO erro", e.code, metodo, caminho, "intuit_tid=", tid)
-        raise ErroFerramenta(f"HTTP {e.code} em {metodo} {caminho} (intuit_tid={tid}): {e.read()[:400].decode(errors='replace')}")
+        erro = ErroFerramenta(f"HTTP {e.code} em {metodo} {caminho} (intuit_tid={tid}): {e.read()[:400].decode(errors='replace')}")
+        erro.http = e.code               # #310: quem cria a invoice separa "recusou" de "não sei"
+        raise erro
     except urllib.error.URLError as e:
         raise ErroFerramenta(f"sem conexão com o QuickBooks: {e.reason}")
 
@@ -764,12 +785,20 @@ def qbo_enviar_invoice(id, email=None):
                 {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
                  "memo": {"type": "string", "description": "Note to customer: produto | categoria | piloto | Service date: MM/DD/AAAA"},
                  "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
-def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None):
-    corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
-    if vence_em:
-        corpo["DueDate"] = vence_em
-    if _aplicar():
-        corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
+def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None,
+                               requestid=None):
+    """#310: `requestid` vai no POST /invoice (o QuickBooks devolve a resposta original quando a mesma
+    requestid se repete, em vez de criar outra). Criada a invoice, nada aqui levanta exceção: se o
+    envio falha, volta a invoice criada com `enviado: False`, para quem chamou reenviar a MESMA
+    (`qbo_enviar_invoice`) e nunca criar outra. Erro que prova que nada foi criado é `InvoiceNaoCriada`."""
+    try:
+        corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
+        if vence_em:
+            corpo["DueDate"] = vence_em
+        if _aplicar():
+            corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
+    except Exception as e:                                       # antes do POST /invoice: nada foi criado
+        raise InvoiceNaoCriada(str(e)[:400]) from e
     if memo:
         corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
     if nota_privada or memo:
@@ -779,15 +808,46 @@ def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, ema
     total = sum(l["Amount"] for l in corpo["Line"])
     if not _aplicar():
         return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"criar e enviar invoice de {total:.2f} para cliente {cliente_id}"}
-    inv = _req("/invoice", "POST", corpo).get("Invoice", {})
-    destino = email or (inv.get("BillEmail") or {}).get("Address")
-    if not destino:
-        c = _req(f"/customer/{cliente_id}").get("Customer", {})
-        destino = (c.get("PrimaryEmailAddr") or {}).get("Address")
-    if not destino:
-        return {**_resumo_invoice(inv), "enviado": False, "aviso": "criada, mas sem e-mail de cobrança: envie pelo QuickBooks"}
-    r = _req(f"/invoice/{inv['Id']}/send", "POST", params={"sendTo": destino}).get("Invoice", {})
-    return {**_resumo_invoice(r or inv), "enviado": True, "enviado_para": destino, "link_pagamento": link_pagamento(inv["Id"])}
+    try:
+        inv = _req("/invoice", "POST", corpo, params={"requestid": requestid} if requestid else None).get("Invoice", {})
+    except ErroFerramenta as e:
+        if getattr(e, "antes_do_envio", False) or _recusada(e):
+            raise InvoiceNaoCriada(str(e)[:400]) from e
+        raise                            # tempo esgotado, conexão caída, 5xx, 408, 429: pode ter criado
+    try:
+        destino = email or (inv.get("BillEmail") or {}).get("Address")
+        if not destino:
+            c = _req(f"/customer/{cliente_id}").get("Customer", {})
+            destino = (c.get("PrimaryEmailAddr") or {}).get("Address")
+        if not destino:
+            return {**_resumo_seguro(inv), "enviado": False, "aviso": "criada, mas sem e-mail de cobrança: envie pelo QuickBooks"}
+        r = _req(f"/invoice/{inv['Id']}/send", "POST", params={"sendTo": destino}).get("Invoice", {})
+    except Exception as e:                                       # noqa: BLE001 — criada: nunca criar outra
+        log("QBO envio falhou depois de criar", inv.get("Id"), str(e)[:200])
+        return {**_resumo_seguro(inv), "enviado": False, "erro_envio": str(e)[:300],
+                "aviso": "criada, mas o envio falhou: reenvie a MESMA invoice (qbo_enviar_invoice)"}
+    try:
+        pagar = link_pagamento(inv["Id"])
+    except Exception:                                            # noqa: BLE001 — o link é um extra
+        pagar = None
+    return {**_resumo_seguro(r or inv), "enviado": True, "enviado_para": destino, "link_pagamento": pagar}
+
+
+def _resumo_seguro(inv):
+    """O resumo da invoice JÁ CRIADA, que nunca levanta: perder o id dela levaria a criar outra (#310)."""
+    try:
+        return _resumo_invoice(inv)
+    except Exception:                                            # noqa: BLE001
+        return {"id": inv.get("Id"), "numero": inv.get("DocNumber"), "total": inv.get("TotalAmt"),
+                "cliente_id": (inv.get("CustomerRef") or {}).get("value")}
+
+
+def invoice_por_numero(numero):
+    """Uma invoice pelo número que aparece para o cliente (Invoice no., DocNumber), ou None. Só leitura:
+    é o que o painel confere antes de registrar a invoice que saiu (#310)."""
+    r = _query(f"select * from Invoice where DocNumber = '{_esc(str(numero).strip())}' maxresults 1")
+    achadas = r.get("Invoice") or []
+    return _resumo_invoice(achadas[0]) if achadas else None
 
 
 @srv.ferramenta("qbo_lembrete_invoice",

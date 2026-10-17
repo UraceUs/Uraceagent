@@ -754,9 +754,10 @@ POS_MIGRACAO = [
 
 
 @contextmanager
-def transacao(con):
-    """BEGIN/COMMIT explícitos; rollback em exceção."""
-    con.execute("BEGIN")
+def transacao(con, imediata=False):
+    """BEGIN/COMMIT explícitos; rollback em exceção. `imediata` pega a trava de escrita já no começo
+    (BEGIN IMMEDIATE): o que se lê dentro dela não muda até o COMMIT (ler, mudar e gravar, #310)."""
+    con.execute("BEGIN IMMEDIATE" if imediata else "BEGIN")
     try:
         yield con
         con.execute("COMMIT")
