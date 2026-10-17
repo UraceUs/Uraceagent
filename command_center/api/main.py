@@ -318,6 +318,8 @@ from command_center.api import site_publico  # noqa: E402
 app.include_router(site_publico.r)
 from command_center.api import editor_site as api_editor_site  # noqa: E402
 app.include_router(api_editor_site.r)         # #300: Site público › Editor (arrastar e soltar)
+from command_center.api import blog as api_blog  # noqa: E402
+app.include_router(api_blog.r)                # #172: Site › Blog (o OPERATOR escreve, o ADMIN publica)
 from command_center.api import vitrine as api_vitrine  # noqa: E402
 app.include_router(api_vitrine.r)        # #148: o site novo (só nos endereços do site)
 import mimetypes  # noqa: E402

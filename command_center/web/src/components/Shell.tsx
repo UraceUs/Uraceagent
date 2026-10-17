@@ -139,6 +139,7 @@ export function Shell() {
           <NL to="/site/produtos" icon="box">{tr("Produtos da loja")}</NL>
           <NL to="/site/estoque" icon="list">{tr("Estoque do site")}</NL>
           <NL to="/site/editor" icon="pencil">{tr("Editor do site")}</NL>
+          <NL to="/site/blog" icon="book">{tr("Blog")}</NL>
           <NL to="/site/contas" icon="people">{tr("Contas de clientes")}</NL>
           {can('MANAGER') && <NL to="/site/waiver" icon="seal">{tr("Waiver")}</NL>}
           <NL to="/site/deposito" icon="dollar">{tr("Security deposit")}</NL>

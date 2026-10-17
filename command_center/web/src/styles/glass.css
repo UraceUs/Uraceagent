@@ -633,6 +633,20 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .editor-texto{min-height:120px;padding:10px 12px;border:1px solid var(--glass-line-2);border-radius:var(--r);background:var(--surface);color:var(--ink);overflow-wrap:anywhere}
 .editor-texto:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
 .editor-texto ul{padding-left:20px}
+/* #172: o texto do blog tem tabela, figura, citação e foto; nada disso empurra a tela para o lado */
+.editor-texto img{max-width:100%;height:auto;border-radius:var(--r)}
+.editor-texto figure{margin:0;min-width:0}
+.editor-texto table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
+.editor-texto th,.editor-texto td{border:1px solid var(--glass-line-2);padding:4px 8px;text-align:left}
+.editor-texto blockquote{margin:0;padding-left:12px;border-left:3px solid var(--accent)}
+.editor-texto ol{padding-left:22px}
+.cd-capa{width:64px;height:64px;border-radius:var(--r-l);object-fit:cover;flex:none;background:var(--surface-2)}
+.blog-capa{display:grid;gap:12px;grid-template-columns:minmax(0,320px) minmax(0,1fr);align-items:start}
+.blog-capa img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r)}
+.blog-previa{overflow-x:auto}
+.blog-iframe-celular{width:390px;max-width:100%}
+.blog-iframe-computador{width:100%}
+@media (max-width:760px){.blog-capa{grid-template-columns:1fr}}
 @media (max-width:760px){.loja-salvar{bottom:92px}.loja-filtros,.loja-grade{grid-template-columns:1fr}.loja-var{grid-template-columns:1fr 1fr}.loja-var .fld:first-child{grid-column:1/-1}}
 .site-servico{display:grid;gap:8px;grid-template-columns:minmax(0,2fr) minmax(0,3fr) 120px minmax(0,2fr) auto;align-items:end}
 @media (max-width:760px){.site-servico{grid-template-columns:1fr 1fr}.site-servico .fld:nth-child(2){grid-column:1/-1}}
