@@ -8,8 +8,8 @@ O Caddy põe TLS e encaminha /ops* para cá.
 import os
 import sqlite3
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -191,6 +191,7 @@ def cache_de(caminho):
 # para qualquer conta; o resto é 403. O painel inteiro continua em ops.urace.us.
 API_DO_BALCAO = (
     (None, r"^/auth/(me|login|logout)$"),
+    ({"POST"}, r"^/auth/passe/entrar$"),          # #311: chega do painel já logado (pedir passe aqui, não)
     (None, r"^/balcao/(ler|rapido)(/|$)"),
     ({"POST"}, r"^/system/cliente$"),
     ({"GET"}, r"^/estoque/item/\d+/foto$"),
@@ -203,6 +204,22 @@ def hosts_do_balcao():
 
 def so_balcao(request):
     return (request.headers.get("host") or "").split(":")[0].strip().lower() in hosts_do_balcao()
+
+
+def url_do_balcao():
+    """#311: para onde o botão do balcão leva, `https://parts.urace.us` por padrão (`CC_BALCAO_URL`).
+    Só vale um host do balcão, e `http` só em máquina local (o passe não anda sem TLS)."""
+    from urllib.parse import urlsplit
+    try:
+        p = urlsplit((os.environ.get("CC_BALCAO_URL") or "https://parts.urace.us").strip())
+        nome = (p.hostname or "").lower()
+    except ValueError:
+        return None
+    if nome not in hosts_do_balcao() or p.scheme not in ("https", "http"):
+        return None
+    if p.scheme == "http" and nome not in ("localhost", "127.0.0.1"):
+        return None
+    return f"{p.scheme}://{p.netloc.lower()}"
 
 
 def balcao_alcanca(metodo, caminho):
@@ -301,6 +318,8 @@ from command_center.api import site_publico  # noqa: E402
 app.include_router(site_publico.r)
 from command_center.api import editor_site as api_editor_site  # noqa: E402
 app.include_router(api_editor_site.r)         # #300: Site público › Editor (arrastar e soltar)
+from command_center.api import blog as api_blog  # noqa: E402
+app.include_router(api_blog.r)                # #172: Site › Blog (o OPERATOR escreve, o ADMIN publica)
 from command_center.api import vitrine as api_vitrine  # noqa: E402
 app.include_router(api_vitrine.r)        # #148: o site novo (só nos endereços do site)
 import mimetypes  # noqa: E402
@@ -369,6 +388,26 @@ def api_login(dados: LoginIn, request: Request, response: Response,
 def api_logout(request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
     auth.logout(con, request, response)
     return {"ok": True}
+
+
+@app.post(BASE + "/api/auth/passe")
+def api_passe(request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """#311: o botão "Abrir o balcão do celular" pede um passe para entrar no parts.urace.us já logado.
+    Sem balcão configurado, `acao` vem nula e a tela abre o balcão aqui mesmo, como antes."""
+    base = url_do_balcao()
+    if not base or so_balcao(request):
+        return {"acao": None}
+    passe, vence = auth.criar_passe(con, request, u, base.split("://", 1)[1])
+    return {"acao": base + BASE + "/api/auth/passe/entrar", "passe": passe, "vence_em": vence}
+
+
+@app.post(BASE + "/api/auth/passe/entrar")
+def api_passe_entrar(request: Request, passe: str = Form(""), con: sqlite3.Connection = Depends(get_db)):
+    """Navegação de página inteira (formulário): responde sempre com um redirecionamento, nunca JSON."""
+    resp = RedirectResponse(BASE + "/", status_code=303)
+    if auth.usar_passe(con, request, resp, passe):
+        return RedirectResponse(BASE + "/login?passe=vencido", status_code=303)
+    return resp
 
 
 @app.get(BASE + "/api/auth/me")

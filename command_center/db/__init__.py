@@ -367,6 +367,8 @@ MIGRACOES = [
     ("bookings", "pilot_pending", "INTEGER NOT NULL DEFAULT 0"),   # paga com o piloto incompleto: lembrar até completar
     # 16/10 — dono (#306): o painel do site diz de onde veio cada venda; o pedido do carrinho e do Buy now guarda a campanha
     ("store_orders", "utm", "TEXT"),
+    # 16/10 — dono (#311): a sessão do parts.urace.us nasce de uma sessão do painel; sair do painel derruba as duas
+    ("sessions", "parent_id", "TEXT"),
     # 16/10 — dono (#317): Site › Security deposit. Quanto o pagamento já teve devolvido no Stripe (lido no "Conferir"),
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
@@ -392,6 +394,7 @@ INDICES_EXTRA = [
     "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS bookings_grupo ON bookings(group_id) WHERE group_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS store_orders_refeito ON store_orders(retry_of) WHERE retry_of IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS sessions_pai ON sessions(parent_id) WHERE parent_id IS NOT NULL",
 ]
 
 
@@ -410,9 +413,19 @@ def aplicar_schema(con):
     for sql in POS_MIGRACAO:
         con.execute(sql)
     _importar_produtos(con)          # #298: os produtos do WooCommerce entram no banco uma vez
+    _importar_posts(con)             # #172: os 7 artigos do WordPress, uma vez, com o HTML como está
 
 
 PRODUTOS_WOO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vitrine", "dados", "produtos.json")
+POSTS_WP = os.path.join(os.path.dirname(PRODUTOS_WOO), "posts.json")
+
+
+def _importar_posts(con):
+    """#172 (dono, 16/10: *"editor do blog, pode seguir"*): os 7 artigos de `posts.json` passam para `blog_posts`
+    **uma vez**, como estão (id do WordPress, data, capa e o HTML cru). Só roda com a tabela vazia: o que a equipe
+    escrever, mudar ou tirar do ar depois nunca volta."""
+    from command_center.providers import blog
+    blog.importar(con, POSTS_WP)
 
 
 def _importar_produtos(con):

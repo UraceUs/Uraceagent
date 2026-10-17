@@ -158,8 +158,10 @@ Esta é a tarefa principal no box. O celular faz quase tudo sozinho: você **lê
 
 ### Abrir o balcão do celular
 
-- Pelo endereço **parts.urace.us**; ou
-- no painel, em **Balcão** → **"Abrir o balcão do celular"**.
+- no painel, em **Balcão** → o botão vermelho **"Abrir o balcão do celular"**. Ele abre o
+  **parts.urace.us já com o seu login**, sem digitar a senha (#311). No topo do balcão aparece
+  o seu nome ao lado de **Sair**; confira que é você. Sair do painel tira você do balcão também; ou
+- pelo endereço **parts.urace.us**, entrando com o seu e-mail e a sua senha.
 
 A tela tem duas metades: **em cima, a câmera**, sempre lendo. **Embaixo, a peça e os
 pilotos.** Assim que a tela abre, embaixo já aparecem os **"Pilotos de …"** do dia escolhido,
@@ -335,6 +337,7 @@ Daí em diante, ler essa etiqueta já identifica a peça.
 
 | O que aparece | O que fazer |
 |---|---|
+| **"O acesso automático venceu. Entre com a senha."** | O botão do balcão abriu o parts mas não entrou: a página demorou mais de 30 segundos, o painel saiu antes ou o mesmo acesso foi usado duas vezes. Entre com a sua senha ali mesmo, ou volte ao painel e toque no botão de novo. |
 | **"Este navegador não abre a câmera aqui."** | Abra pelo endereço com **https** (ops.urace.us ou parts.urace.us) e permita a câmera. |
 | **"A câmera foi negada."** | Libere a câmera para o site nos ajustes do navegador e abra de novo. |
 | A câmera não lê o código | Ponha o código **dentro da mira**, no meio da tela. Chegue mais perto, procure luz e segure parado. Na folha com 8 etiquetas, mire uma de cada vez. Código apagado? Toque em **"Código apagado? Digitar"** e digite o código (o da etiqueta começa com **URQ**). |

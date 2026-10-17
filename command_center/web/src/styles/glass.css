@@ -649,6 +649,20 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .editor-texto{min-height:120px;padding:10px 12px;border:1px solid var(--glass-line-2);border-radius:var(--r);background:var(--surface);color:var(--ink);overflow-wrap:anywhere}
 .editor-texto:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
 .editor-texto ul{padding-left:20px}
+/* #172: o texto do blog tem tabela, figura, citação e foto; nada disso empurra a tela para o lado */
+.editor-texto img{max-width:100%;height:auto;border-radius:var(--r)}
+.editor-texto figure{margin:0;min-width:0}
+.editor-texto table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
+.editor-texto th,.editor-texto td{border:1px solid var(--glass-line-2);padding:4px 8px;text-align:left}
+.editor-texto blockquote{margin:0;padding-left:12px;border-left:3px solid var(--accent)}
+.editor-texto ol{padding-left:22px}
+.cd-capa{width:64px;height:64px;border-radius:var(--r-l);object-fit:cover;flex:none;background:var(--surface-2)}
+.blog-capa{display:grid;gap:12px;grid-template-columns:minmax(0,320px) minmax(0,1fr);align-items:start}
+.blog-capa img{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r)}
+.blog-previa{overflow-x:auto}
+.blog-iframe-celular{width:390px;max-width:100%}
+.blog-iframe-computador{width:100%}
+@media (max-width:760px){.blog-capa{grid-template-columns:1fr}}
 @media (max-width:760px){.loja-salvar{bottom:92px}.loja-filtros,.loja-grade{grid-template-columns:1fr}.loja-var{grid-template-columns:1fr 1fr}.loja-var .fld:first-child{grid-column:1/-1}}
 .site-servico{display:grid;gap:8px;grid-template-columns:minmax(0,2fr) minmax(0,3fr) 120px minmax(0,2fr) auto;align-items:end}
 @media (max-width:760px){.site-servico{grid-template-columns:1fr 1fr}.site-servico .fld:nth-child(2){grid-column:1/-1}}
@@ -815,6 +829,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-dias{display:flex;gap:6px}
 .br-dias button,.br-sair{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font:inherit;font-weight:600;display:inline-flex;align-items:center;text-decoration:none}
 .br-dias button[aria-checked="true"]{background:#fff;color:#000;border-color:#fff}
+.br-quem{margin-left:6px;padding-left:6px;border-left:1px solid rgba(255,255,255,.35);font-weight:500;opacity:.85;max-width:9ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .br-mira{position:absolute;left:12%;right:12%;top:30%;bottom:22%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.18);transition:opacity var(--dur-media) var(--ease-saida),transform var(--dur-media) var(--ease-saida)}
 .br-mira.pausa{opacity:.35;transform:scale(.96)}
 .br-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:10px 14px;color:#fff;font-weight:600;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.6))}
