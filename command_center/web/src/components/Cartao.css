@@ -37,4 +37,7 @@
 .cd-lista li.cd-li-forma{flex-wrap:wrap}
 .cd-li-forma>.grow{flex:1 1 200px}
 .cd-li-picker{flex:1 1 100%;min-width:0}
+.cd-largo{grid-column:1/-1}
+.cd-dentro{padding:12px}
+.cd-marca{gap:8px}.cd-marca input{width:20px;height:20px;margin:0}
 @media(prefers-reduced-motion:reduce){.cd-prog-b i{transition:none}}

@@ -8,6 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { Cartao, type TomD } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
 
 interface Ck { template_id: number; nome: string; cargo: string; ctx: Record<string, unknown>; run_id: number | null; status: string; feitos: number; total: number | null }
@@ -17,6 +18,8 @@ interface Corrida { id: number; name: string; track: string | null; city: string
 interface Dia { data: string; servicos: Servico[]; corridas: Corrida[]; sessoes: { id: number; period: string; status: string; piloto: string | null; servico: string | null }[]
   do_dia: Ck[]; avulsos: { template_id: number; nome: string; quando: string }[]; cargo: string | null; gerente?: boolean }
 
+/** #313: a pílula do serviço do dia (a tarefa do Asana: aberta ou feita) */
+const estadoDoServico = (st: string): [string, TomD] => st === 'completed' ? [tr("concluído"), 'ok'] : st === 'open' ? [tr("aberto"), 'info'] : [st, 'neutral']
 const PERIODO: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
 const hojeFL = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 const somar = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
@@ -186,33 +189,38 @@ export function MeuDia() {
         <div className="stack" style={{ gap: 8 }}>{d.data.do_dia.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>
       </Section>}
       <Section title={tr("Serviços")} count={d.data.servicos.length}>
-        {!d.data.servicos.length ? <Empty title={tr("Nenhum serviço neste dia")} /> : <div className="stack" style={{ gap: 10 }}>{d.data.servicos.map(s => <div key={s.id} className="card card-b stack" style={{ gap: 8 }}>
-          <div className="row wrap" style={{ gap: 8 }}><h3 className="h3 grow" style={{ margin: 0 }}>{s.cliente || s.title}</h3>
-            {s.client_id && <Link className="btn sm ghost" to={`/clients/${s.client_id}`}>{tr("Card")}</Link>}
-            {s.client_id && <Link className="btn sm ghost" to={`/balcao/${s.client_id}`}>{tr("Peças")}</Link>}
-            {d.data?.gerente && <button className="btn sm ghost" onClick={() => setExcluir(s)} aria-label={tr("Excluir o serviço {0}", s.title)}>{tr("Excluir")}</button>}</div>
-          <div className="small muted">{s.title}</div>
-          {s.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}
-        </div>)}</div>}
+        {!d.data.servicos.length ? <Empty title={tr("Nenhum serviço neste dia")} /> : <div className="cd-grade">{d.data.servicos.map(s => {
+          // #313: o cartão D — a situação do serviço, o cliente, a barra dos checklists completos e cada checklist na linha
+          const [rot, tom] = estadoDoServico(s.status)
+          return <Cartao key={s.id} id={`servico-${s.id}`} estado={rot} tom={tom} avatar={s.cliente || s.title} nome={s.cliente || s.title} sub={[s.title]}
+            progresso={s.checklists.length ? { rotulo: tr("Checklists feitos"), total: s.checklists.length, feito: s.checklists.filter(c => c.status === 'completo').length } : null}
+            acoes={s.client_id || d.data?.gerente ? <>
+              {s.client_id && <Link className="btn" to={`/clients/${s.client_id}`}>{tr("Card")}</Link>}
+              {s.client_id && <Link className="btn" to={`/balcao/${s.client_id}`}>{tr("Peças")}</Link>}
+              {d.data?.gerente && <button className="btn danger" onClick={() => setExcluir(s)} aria-label={tr("Excluir o serviço {0}", s.title)}>{tr("Excluir")}</button>}</> : null}>
+            {s.checklists.length > 0 && <div className="cd-form">{s.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>}
+          </Cartao>
+        })}</div>}
       </Section>
       {excluir && <ExcluirServico s={excluir} onFechar={() => setExcluir(null)} onFeito={() => { setExcluir(null); d.reload() }} />}
       {d.data.corridas.length > 0 && <Section title={tr("Corridas")} count={d.data.corridas.length}>
-        <div className="stack" style={{ gap: 10 }}>{d.data.corridas.map(r => <div key={r.id} className="card card-b stack" style={{ gap: 8 }}>
-          <h3 className="h3" style={{ margin: 0 }}>{r.name}</h3>
-          <div className="small muted">{[r.track, r.city].filter(Boolean).join(' · ')}</div>
-          {r.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}
-          {r.pilotos.map(p => <div key={p.client_id} className="md-servico-corrida stack" style={{ gap: 6 }}>
+        <div className="cd-grade">{d.data.corridas.map(r => <Cartao key={r.id} id={`corrida-${r.id}`} estado={tr("corrida")} tom="info" avatar={null} nome={r.name}
+          sub={[[r.track, r.city].filter(Boolean).join(' · ')]} grande={r.pilotos.length || null} detalhe={r.pilotos.length ? tr("piloto(s)") : null}
+          progresso={r.checklists.length ? { rotulo: tr("Checklists feitos"), total: r.checklists.length, feito: r.checklists.filter(c => c.status === 'completo').length } : null}>
+          {r.checklists.length > 0 && <div className="cd-form">{r.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>}
+          {/* #233: a corrida é o card geral, com um card de serviço por cliente dentro */}
+          {r.pilotos.map(p => <div key={p.client_id} className="md-servico-corrida stack cd-form" style={{ gap: 6 }}>
             <div className="row wrap" style={{ gap: 8 }}><h4 className="h4 grow" style={{ margin: 0 }}>{p.piloto}</h4>
               <Link className="btn sm ghost" to={`/clients/${p.client_id}`}>{tr("Card")}</Link>
               <Link className="btn sm ghost" to={`/balcao/${p.client_id}`}>{tr("Peças")}</Link></div>
             {p.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>)}
-        </div>)}</div>
+        </Cartao>)}</div>
       </Section>}
       {d.data.sessoes.length > 0 && <Section title={tr("Sessões marcadas pelo site")} count={d.data.sessoes.length}>
-        <div className="card"><div className="tbl">{d.data.sessoes.map(x => <div className="tr" key={x.id}>
+        <div className="tbl">{d.data.sessoes.map(x => <div className="tr" key={x.id}>
           <span style={{ width: 80 }} className="small">{PERIODO[x.period] || x.period}</span>
           <span className="grow">{x.piloto || '—'}{x.servico && <span className="small muted"> · {x.servico}</span>}</span>
-          <Chip tone={x.status === 'confirmada' ? 'ok' : 'warn'}>{x.status === 'confirmada' ? tr("confirmada") : tr("esperando")}</Chip></div>)}</div></div>
+          <Chip tone={x.status === 'confirmada' ? 'ok' : 'warn'}>{x.status === 'confirmada' ? tr("confirmada") : tr("esperando")}</Chip></div>)}</div>
       </Section>}
     </>}
     </>}

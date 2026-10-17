@@ -4415,5 +4415,17 @@
 "refeito do pedido #{0}": "redone from order #{0}",
 "retorno atrasado": "follow-up overdue",
 "retorno marcado": "follow-up scheduled",
-"{0} anos": "{0} years old"
+"{0} anos": "{0} years old",
+"Checklists feitos": "Checklists done",
+"Pronta para cobrar": "Ready to charge",
+"Situação de {0}": "Status of {0}",
+"a {0}": "to {0}",
+"atualizado": "updated",
+"em estoque": "in stock",
+"enviada para {0}": "sent to {0}",
+"invoice {0}": "invoice {0}",
+"kart de {0}": "{0}'s kart",
+"precisa até": "needed by",
+"previsão {0}": "expected {0}",
+"pronta": "ready"
 }

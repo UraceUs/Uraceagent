@@ -1196,7 +1196,7 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    servico = pg.locator(".card", has_text="David Pedalo_Urace Daily_Arrive and Drive")
+    servico = pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive")
     servico.get_by_role("button", name="Kart Checklist").click()
     pg.get_by_text("Kart Checklist · David Pedalo").wait_for()
     pg.get_by_role("checkbox", name="Check engine oil (change if needed)").check()
@@ -1209,7 +1209,7 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     assert not r["rola"] and not r["culpados"], r
     pg.get_by_role("button", name="Concluir checklist").click()
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
-    pg.locator(".card", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_text("completo").wait_for()
+    pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_text("completo").wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -1238,7 +1238,7 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.get_by_role("button", name="Próximo mês").click()
     pg.get_by_role("button", name="Mês anterior").click()
     pg.locator(".md-cal-d.hoje").click()                       # tocar no dia abre o dia, com os checklists
-    pg.locator(".card.card-b", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
+    pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
     assert pg.get_by_role("button", name="Dia", exact=True).get_attribute("aria-pressed") == "true"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
@@ -1292,9 +1292,9 @@ def test_mecanico_cadastra_peca_nova_no_balcao_com_foto_e_ela_aparece_no_estoque
     pg.get_by_role("button", name="Salvar código").click()
     pg.get_by_text("Código e foto cadastrados.").wait_for()
     abrir(pg, servidor, "/estoque")
-    card = pg.locator(".pcard", has_text="Rear bumper (e2e foto)")
-    card.locator(".ph img").wait_for()
-    assert card.locator(".ph img").evaluate("i => i.complete && i.naturalWidth > 0")
+    card = pg.locator("article.cd", has_text="Rear bumper (e2e foto)")
+    card.locator(".pcard-foto img").wait_for()
+    assert card.locator(".pcard-foto img").evaluate("i => i.complete && i.naturalWidth > 0")
     # o "Adicionar peça" do estoque tem os mesmos dois caminhos
     pg.get_by_role("button", name="Adicionar peça").first.click()
     pg.get_by_role("heading", name="Adicionar peça").wait_for()
@@ -1330,7 +1330,7 @@ def test_mecanico_exclui_peca_pela_lixeira_com_confirmacao(servidor, navegador):
                         multipart={"name": "Peça de exemplo (e2e lixeira)", "category": "outros", "qty": "1"})
     assert r.ok, r.text()
     abrir(pg, servidor, "/estoque")
-    card = pg.locator(".pcard-w", has_text="Peça de exemplo (e2e lixeira)")
+    card = pg.locator("article.cd", has_text="Peça de exemplo (e2e lixeira)")
     lixo = card.get_by_role("button", name="Excluir Peça de exemplo (e2e lixeira)")
     caixa = lixo.bounding_box()
     assert caixa["width"] >= 40 and caixa["height"] >= 40, caixa
@@ -1400,7 +1400,7 @@ def test_mecanico_so_ve_o_que_e_do_box(servidor, navegador):
 def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
     pg = entrar(navegador, servidor)
     abrir(pg, servidor, "/checklists")
-    card = pg.locator(".card.card-b", has=pg.get_by_role("heading", name="Mechanic Checklist", exact=True))
+    card = pg.locator("article.cd", has=pg.get_by_role("heading", name="Mechanic Checklist", exact=True))
     card.get_by_role("button", name="Editar").click()
     card.get_by_label("Foto obrigatória no checklist").check()
     card.get_by_label("Novo item").fill("Check fire extinguisher")
@@ -4737,12 +4737,12 @@ def test_varredura_toda_insercao_fica_no_topo(servidor, navegador, largura):
         g.get_by_role("button", name=re.compile(r"^Peças \(")).click()
         probs += _abre_no_topo(g, "Nova peça", sec("Peças por motor", ".tbl-wrap, .state"))
         abrir(g, servidor, "/checklists")
-        card = g.locator(".card.card-b", has=g.get_by_role("heading", name="Mechanic Checklist", exact=True))
+        card = g.locator("article.cd", has=g.get_by_role("heading", name="Mechanic Checklist", exact=True))
         card.get_by_role("button", name="Editar").click()
         probs += _sempre_no_topo(g, "Adicionar item", card.locator(".tbl"))
         abrir(g, servidor, "/races")
-        g.locator(".att", has_text="ROK Cup USA Round 5").first.click()
-        probs += _sempre_no_topo(g, "Convidar piloto", g.locator('.modal section.card:has(h2:has-text("Pilotos nesta corrida")) .att'))
+        g.locator("article.cd", has_text="ROK Cup USA Round 5").first.click()
+        probs += _sempre_no_topo(g, "Convidar piloto", g.locator('.modal section.card:has(h2:has-text("Pilotos nesta corrida")) article.cd'))
         r = g.evaluate(_VAZA)
         if r["rola"] or r["culpados"]:
             probs.append(f"/races (janela da corrida): rola para o lado {r['culpados']}")
@@ -4971,6 +4971,11 @@ def _dados_dos_cartoes_d():
                                         '2026-10-11T12:00:00Z')""", (card,)).lastrowid
         con.execute("""INSERT INTO portal_pilots (account_id, name, birth_date, measures, measures_updated_at)
                        VALUES (?, 'Nico Cartao D', '2013-04-04', '{"height_in": 58, "weight_lb": 95}', '2026-10-12T12:00:00Z')""", (ligada,))
+        # o box: um pedido de peça urgente e a invoice de peças do card, que o QuickBooks (desligado no e2e) recusou
+        con.execute("""INSERT INTO purchase_requests (description, qty, unit, urgent, status, needed_by, notes)
+                       VALUES ('Corrente 313 (e2e)', 2, 'un', 1, 'aberto', '2026-12-01', 'para o kart 7')""")
+        con.execute("""INSERT INTO parts_invoices (client_id, service_date, status, total, qbo_error)
+                       VALUES (?, '2026-10-16', 'aberta', 89.5, 'QuickBooks não está conectado (e2e)')""", (card,))
         con.commit()
         return card
     finally:
@@ -4992,6 +4997,14 @@ _TELAS_D = {
     "/site/blog": ({"pilula", "nome", "bloco", "acoes"}, None),
     "/sales": ({"pilula", "nome", "bloco"}, "Lia Cartao D"),        # o quadro: o cartão inteiro abre a venda
     "/clients/{card}#site": ({"pilula", "nome"}, "Nico Cartao D"),
+    # o box e o estoque (segunda parte do #313)
+    "/pedidos": ({"pilula", "nome", "bloco", "acoes"}, "Corrente 313 (e2e)"),
+    "/compras": ({"pilula", "nome", "bloco"}, "KartSport North America"),   # a compra abre inteira
+    "/estoque": ({"pilula", "nome", "bloco"}, "Front bumper (e2e)"),        # a peça da prateleira abre inteira
+    "/balcao": ({"pilula", "nome", "bloco", "acoes"}, "Nico Cartao D"),
+    "/meu-dia": ({"pilula", "nome", "acoes"}, "David Pedalo"),
+    "/checklists": ({"pilula", "nome", "bloco", "acoes"}, "Mechanic Checklist"),
+    "/races": ({"pilula", "nome", "bloco"}, "ROK Cup"),                     # a corrida abre inteira
 }
 _FUNDO_D = {"dark": "rgb(28, 26, 24)", "light": "rgb(255, 255, 255)"}   # --surface de cada tema
 
@@ -5089,6 +5102,13 @@ def test_cartao_d_no_computador_a_tabela_continua_tabela_e_o_cartao_da_venda_abr
     linha = g.evaluate("""() => { const tr = document.querySelector('.tbl > .tr'), cs = getComputedStyle(tr)
       return { display: cs.display, altura: tr.offsetHeight, padding: parseFloat(cs.paddingLeft), borda: cs.borderBottomStyle } }""")
     assert linha["display"] == "flex" and linha["altura"] >= 52 and linha["padding"] >= 12 and linha["borda"] == "solid", linha
+    # a corrida abre inteira; na janela, cada piloto convidado é um cartão D, com a situação e a prévia embaixo
+    abrir(g, servidor, "/races")
+    g.locator("article.cd", has_text="ROK Cup").first.click()
+    convidado = g.locator('.modal section.card:has(h2:has-text("Pilotos nesta corrida")) article.cd').first
+    convidado.wait_for()
+    assert convidado.locator(".cd-pill").count() == 1 and convidado.get_by_role("button", name="✦ Prévia de custo").count() == 1
+    assert convidado.get_by_role("combobox").count() == 1
     abrir(g, servidor, "/sales")
     venda = g.locator("article.cd", has_text="Lia Cartao D")
     caixa = venda.locator(".cd-bloco").bounding_box()          # longe do nome: o cartão inteiro é o link

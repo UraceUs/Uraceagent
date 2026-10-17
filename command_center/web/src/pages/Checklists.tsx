@@ -10,6 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao } from '../components/Cartao'
 import { tr } from '../i18n'
 
 interface RunItem { id: number; grupo: string | null; text: string; photo_required: number; done: number; por: string | null; note: string | null; fotos: number[] }
@@ -173,15 +174,19 @@ export function Checklists() {
       {gerente && <button className="btn" disabled={indo} onClick={importar}>{indo ? <span className="spin" /> : tr("Importar da planilha")}</button>}
     </PageHeader>
     {!meus.length ? <div className="card"><Empty title={tr("Nenhum checklist ainda")}>{gerente ? tr("Importe da planilha Master Checklist: ela vira os modelos daqui, e daí em diante você edita aqui.") : tr("O gerente ainda não importou os checklists.")}</Empty></div>
-      : <Section title={tr("Modelos")} count={meus.length}><div className="stack" style={{ gap: 10 }}>{meus.map(m => <div key={m.id} className="card card-b stack" style={{ gap: 8 }}>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <h3 className="h3 grow" style={{ margin: 0 }}>{m.name}</h3>
-          <Chip tone="neutral">{CARGO[m.cargo]}</Chip>{!m.active && <Chip tone="neutral">{tr("inativo")}</Chip>}
-          {(m.quando.includes('avulso') || m.quando.includes('trimestral')) && !!m.active && <button className="btn sm" onClick={() => comecar(m)}>{tr("Começar hoje")}</button>}
-          {gerente && <button className="btn sm ghost" aria-expanded={aberto === m.id} onClick={() => setAberto(a => a === m.id ? null : m.id)}>{aberto === m.id ? tr("Fechar") : tr("Editar")}</button>}
-        </div>
-        <div className="small muted">{m.section ? `${m.section} · ` : ''}{m.itens.filter(i => i.active).length} {tr("itens ·")} {m.quando.split(',').map(q => QUANDO.find(x => x[0] === q)?.[1] || q).join(', ')}{m.per_kart ? tr(" · um por kart") : ''}</div>
-        {gerente && aberto === m.id && <EditarModelo m={m} onMudou={l.reload} />}
-      </div>)}</div></Section>}
+      : <Section title={tr("Modelos")} count={meus.length}><div className="cd-grade">{meus.map(m => {
+        const comeca = (m.quando.includes('avulso') || m.quando.includes('trimestral')) && !!m.active
+        // #313: o modelo no cartão D; aberto para editar, ele ocupa a linha inteira da grade
+        return <Cartao key={m.id} id={`modelo-${m.id}`} className={gerente && aberto === m.id ? 'cd-largo' : undefined}
+          estado={m.active ? CARGO[m.cargo] : tr("inativo")} tom={m.active ? 'info' : 'neutral'} nome={m.name}
+          sub={[`${m.section ? `${m.section} · ` : ''}${m.quando.split(',').map(q => QUANDO.find(x => x[0] === q)?.[1] || q).join(', ')}${m.per_kart ? tr(" · um por kart") : ''}`,
+            !m.active ? CARGO[m.cargo] : null]}
+          grande={m.itens.filter(i => i.active).length} detalhe={tr("itens")}
+          acoes={comeca || gerente ? <>
+            {comeca && <button className="btn primary" onClick={() => comecar(m)}>{tr("Começar hoje")}</button>}
+            {gerente && <button className="btn" aria-expanded={aberto === m.id} onClick={() => setAberto(a => a === m.id ? null : m.id)}>{aberto === m.id ? tr("Fechar") : tr("Editar")}</button>}</> : null}>
+          {gerente && aberto === m.id && <div className="cd-form"><EditarModelo m={m} onMudou={l.reload} /></div>}
+        </Cartao>
+      })}</div></Section>}
   </>
 }

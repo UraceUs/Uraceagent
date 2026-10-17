@@ -440,6 +440,15 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .pcard-lixo:hover,.pcard-lixo:focus-visible{color:var(--crit);opacity:1}
 .pcard-lixo:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pcard.novo{align-items:center;justify-content:center;gap:6px;border-style:dashed;background:transparent;box-shadow:none;color:var(--muted);min-height:200px;font-weight:600}
+/* #313: a peça da prateleira no cartão D compacto (components/Cartao.tsx), com a foto em cima no lugar das iniciais */
+.cd.pcard-d{flex:0 0 184px;scroll-snap-align:start;padding:10px 10px 12px}
+.pcard-foto{position:relative;width:100%;height:104px;border-radius:var(--r);background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--muted);overflow:hidden;flex:none}
+.pcard-foto img{width:100%;height:100%;object-fit:cover}
+.pcard-qt small{font-family:var(--font);font-size:12px;font-weight:600;color:var(--muted);margin-left:3px;letter-spacing:0}
+.pcard-qt.warn{color:var(--warn)}
+.pcard-d .cd-nome{font-size:14.5px}
+.shelf-row.arrastando .pcard-d{pointer-events:none}
+.cd.cd-abre .pcard-lixo{position:absolute}
 .foto-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:120px;border:1px dashed var(--glass-line-2);border-radius:var(--r-l);background:var(--surface-2);color:var(--ink-2);font-weight:600;cursor:pointer;overflow:hidden;padding:0}
 .foto-btn img{width:100%;height:180px;object-fit:cover}
 .foto-peca{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
@@ -447,7 +456,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .foto-peca .foto-btn{cursor:default}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .preco-previa{font-size:13px;padding:8px 10px;border-radius:var(--r);background:var(--surface-2)}
-@media(max-width:700px){.pcard,.pcard-w{flex-basis:146px}.pcard .ph{height:96px}.shelf-row{margin:0 -16px;padding-left:16px;padding-right:16px;scroll-padding-left:16px}}
+@media(max-width:700px){.pcard,.pcard-w{flex-basis:146px}.pcard-d{flex-basis:164px}.pcard-foto{height:92px}.pcard .ph{height:96px}.shelf-row{margin:0 -16px;padding-left:16px;padding-right:16px;scroll-padding-left:16px}}
 /* campos do estoque (e de quem mais usar .fld): rótulo em cima, campo largo, toque de celular */
 .fld{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;min-width:0}
 .fld>span{font-size:12.5px;font-weight:600;color:var(--muted)}

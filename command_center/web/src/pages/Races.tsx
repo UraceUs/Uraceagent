@@ -14,12 +14,14 @@ import { useToast } from '../components/Toast'
 import { InserirNoTopo } from '../components/Inserir'
 import { Md } from '../components/Md'
 import { TextoComVoz } from '../components/Voz'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr } from '../i18n'
 
 const MESES = [tr("janeiro"), tr("fevereiro"), tr("março"), tr("abril"), tr("maio"), tr("junho"), tr("julho"), tr("agosto"), tr("setembro"), tr("outubro"), tr("novembro"), tr("dezembro")]
 const DIAS = [tr("dom"), tr("seg"), tr("ter"), tr("qua"), tr("qui"), tr("sex"), tr("sáb")]
 const STATUS_LABEL: Record<string, string> = { invited: tr("aguardando confirmação"), confirmed: tr("confirmado"), declined: tr("não vai"), done: tr("correu") }
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const tomSerie = (s: string | null): TomD => { const t = serieTone(s); return t === 'accent' ? 'info' : t }
 const serieTone = (s: string | null) => { const t = (s || '').toLowerCase(); return t.includes('skusa') ? 'accent' : t.includes('rok') ? 'info' : t.includes('uspks') ? 'warn' : t.includes('fwt') || t.includes('florida') ? 'ok' : 'neutral' }
 
 function diasDaCorrida(r: Race): string[] {
@@ -56,12 +58,19 @@ function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; o
         {can('OPERATOR') && <div className="ins-tight"><InserirNoTopo rotulo={tr("Convidar piloto")} titulo={false} sempre dentro>
           <div className="row wrap"><span className="small muted">{tr("Convidar:")}</span>{pros.filter(p => !r.invited.some(i => i.client_id === p.id)).map(p => <button key={p.id} className="btn sm" disabled={busy === `c${p.id}`} onClick={() => convidar(p.id)}>{busy === `c${p.id}` ? <Spinner /> : `★ ${p.pilot_name || p.name}`}</button>)}{pros.length === 0 && <span className="small muted">{tr("Nenhum ★ Pro Racing Driver ainda (card do cliente → “Tornar Pro”).")}</span>}</div>
         </InserirNoTopo></div>}
-        {r.invited.length === 0 ? <Empty>{tr("Ninguém ainda. Convide acima.")}</Empty> : <div>{r.invited.map(i => <div className="att" key={i.id}>
-          <div className={`lv ${i.status === 'confirmed' || i.status === 'done' ? 'LOW' : i.status === 'declined' ? 'HIGH' : 'MEDIUM'}`} />
-          <div className="grow"><div className="row wrap"><Link to={`/clients/${i.client_id}`}><b>★ {i.pilot_name || i.name}</b></Link><Chip tone={statusTone(i.status === 'confirmed' || i.status === 'done' ? 'COMPLETED' : i.status === 'declined' ? 'REJECTED' : 'PENDING')}>{STATUS_LABEL[i.status] || i.status}</Chip>{i.estimate_status && !i.estimate_text && <Chip tone="warn">{tr("prévia:")} {i.estimate_status}</Chip>}</div>
-            {i.estimate_text && <details style={{ marginTop: 4 }}><summary className="small">{tr("prévia de custo (IA, não é invoice)")}</summary><div className="previa"><Md text={i.estimate_text} /></div>{i.estimate_cmd && <Link className="small" to={`/ai/${i.estimate_cmd}`}>{tr("ver a conversa")}</Link>}</details>}
-            {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 6 }}><select className="input" style={{ width: 200, padding: '4px 8px' }} value={i.status} onChange={e => status(i.id, e.target.value)}>{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn sm" disabled={busy === `e${i.id}`} onClick={() => estimar(i.id)}>{busy === `e${i.id}` ? <Spinner /> : tr("✦ Prévia de custo")}</button></div>}
-          </div></div>)}</div>}
+        {r.invited.length === 0 ? <Empty>{tr("Ninguém ainda. Convide acima.")}</Empty> : <div className="cd-grade cd-dentro">{r.invited.map(i => {
+          const st = i.status === 'confirmed' || i.status === 'done' ? 'ok' : i.status === 'declined' ? 'crit' : 'warn'
+          return <Cartao key={i.id} id={`convite-${i.id}`} nivel={3} estado={STATUS_LABEL[i.status] || i.status} tom={st} avatar={i.pilot_name || i.name}
+            nome={<Link to={`/clients/${i.client_id}`}>★ {i.pilot_name || i.name}</Link>}
+            acoes={can('OPERATOR') ? <>
+              <select className="input" aria-label={tr("Situação de {0}", i.pilot_name || i.name)} value={i.status} onChange={e => status(i.id, e.target.value)}>{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+              <button className="btn" disabled={busy === `e${i.id}`} onClick={() => estimar(i.id)}>{busy === `e${i.id}` ? <Spinner /> : tr("✦ Prévia de custo")}</button></> : null}>
+            {(i.estimate_text || i.estimate_status) && <div className="cd-form">
+              {i.estimate_status && !i.estimate_text && <Chip tone="warn">{tr("prévia:")} {i.estimate_status}</Chip>}
+              {i.estimate_text && <details><summary className="small">{tr("prévia de custo (IA, não é invoice)")}</summary><div className="previa"><Md text={i.estimate_text} /></div>{i.estimate_cmd && <Link className="small" to={`/ai/${i.estimate_cmd}`}>{tr("ver a conversa")}</Link>}</details>}
+            </div>}
+          </Cartao>
+        })}</div>}
       </Section>
       <Section title={tr("Subtarefas da corrida (modelo do Asana)")} count={subs.length} tight>
         {!r.task_id ? <Empty>{tr("Corrida só no painel: sem tarefa no Asana.")}</Empty> : det.loading && !det.data ? <Loading rows={4} /> : det.error ? <ErrorState error={det.error} retry={det.reload} /> : det.data && !det.data.connected ? <Banner tone="warn">{tr("Sem Asana ao vivo:")} {det.data.reason}</Banner> :
@@ -98,6 +107,22 @@ function NovaCorrida({ onClose, onCreated }: { onClose: () => void; onCreated: (
   </div></Scrim>
 }
 
+/** #313: a corrida no cartão D — a série em cima, o nome, a pista, a data no bloco grande e os pilotos convidados. */
+function CartaoCorrida({ r, abrir }: { r: Race; abrir: () => void }) {
+  const conf = r.invited.filter(i => i.status === 'confirmed' || i.status === 'done').length
+  const esperando = r.invited.filter(i => i.status === 'invited').length
+  return <Cartao id={`corrida-${r.id}`} abrir={abrir} estado={r.date_start ? (r.series || tr("corrida")) : tr("sem data")}
+    tom={!r.date_start ? 'warn' : r.series ? tomSerie(r.series) : 'neutral'} nome={r.name} sub={[[r.track, r.city].filter(Boolean).join(' · ')]}
+    grande={r.date_start ? fmtDate(r.date_start) : null} detalhe={r.date_start ? (r.date_end && r.date_end !== r.date_start ? tr("a {0}", fmtDate(r.date_end)) : null)
+      : tr("coloque a data na tarefa do Asana para entrar no calendário")}>
+    {r.date_start && <CdLista>
+      <CdItem tom="neutral" glifo="★" valor={r.invited.length}>{tr("piloto(s)")}</CdItem>
+      {conf > 0 && <CdItem tom="ok" valor={conf}>{STATUS_LABEL.confirmed}</CdItem>}
+      {esperando > 0 && <CdItem tom="warn" valor={esperando}>{STATUS_LABEL.invited}</CdItem>}
+    </CdLista>}
+  </Cartao>
+}
+
 export function Races() {
   const { can } = useAuth()
   const races = useGet<Race[]>('/races', 30000)
@@ -128,8 +153,11 @@ export function Races() {
         </div> })}
       </div>}
     <div className="grid g2">
-      <Section title={tr("Próximas corridas")} count={proximas.length} tight>{proximas.length === 0 ? <Empty>{tr("Nada marcado daqui para a frente. Sincronize o Asana ou crie uma corrida.")}</Empty> : <div>{proximas.map(r => <div className="att" key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}><div className="lv LOW" /><div className="grow"><b>{r.name}</b>{r.series && <Chip tone={serieTone(r.series) as 'accent'}>{r.series}</Chip>}<div className="small muted">{fmtDate(r.date_start)}{r.date_end && r.date_end !== r.date_start ? tr(" a {0}", fmtDate(r.date_end)) : ''}{[r.track, r.city].filter(Boolean).length ? ` · ${[r.track, r.city].filter(Boolean).join(' · ')}` : ''} · {r.invited.length} {tr("piloto(s)")}</div></div></div>)}</div>}</Section>
-      <Section title={tr("Sem data no Asana")} count={semData.length} tight>{semData.length === 0 ? <Empty>{tr("Todas as corridas têm data.")}</Empty> : <div>{semData.map(r => <div className="att" key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}><div className="lv MEDIUM" /><div className="grow"><b>{r.name}</b><div className="small muted">{tr("coloque a data na tarefa do Asana para entrar no calendário")}</div></div></div>)}</div>}</Section>
+      {/* #313: cada corrida no cartão D; o cartão inteiro abre a corrida */}
+      <Section title={tr("Próximas corridas")} count={proximas.length}>{proximas.length === 0 ? <Empty>{tr("Nada marcado daqui para a frente. Sincronize o Asana ou crie uma corrida.")}</Empty>
+        : <div className="cd-grade">{proximas.map(r => <CartaoCorrida key={r.id} r={r} abrir={() => setOpen(r.id)} />)}</div>}</Section>
+      <Section title={tr("Sem data no Asana")} count={semData.length}>{semData.length === 0 ? <Empty>{tr("Todas as corridas têm data.")}</Empty>
+        : <div className="cd-grade">{semData.map(r => <CartaoCorrida key={r.id} r={r} abrir={() => setOpen(r.id)} />)}</div>}</Section>
     </div>
     <Banner tone="info">{tr("Quando confirmar, a IA pode montar a invoice pela aba Racing team para aprovação.")} {money(769)} {tr("por piloto é só o Lead and Follow, não corrida.")}</Banner>
     {cur && <CorridaModal r={cur} pros={pros.data || []} onClose={() => setOpen(null)} reload={races.reload} />}

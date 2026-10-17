@@ -271,8 +271,8 @@ pedido, uma oportunidade…) usa o mesmo cartão, lido sempre de cima para baixo
 
 Cada parte só aparece quando o painel tem o dado: o cartão não inventa campo. Com muitas colunas no computador, a lista
 continua **tabela** (Clientes, invoices, tarefas do Asana); no celular, cada linha dela vira o mesmo cartão, com a
-pílula em cima, o nome centrado e o resto em linhas. As listas simples (`Bloqueios`, os modelos da waiver) ficam em
-linhas com o mesmo acabamento. Funciona no tema claro e no escuro, sem rolar para o lado no celular.
+pílula em cima, o nome centrado e o resto em linhas. As listas simples (`Bloqueios`, os modelos da waiver, as
+leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas com o mesmo acabamento. Funciona no tema claro e no escuro, sem rolar para o lado no celular.
 
 | Tela | O bloco grande mostra | As ações |
 |---|---|---|
@@ -287,6 +287,14 @@ linhas com o mesmo acabamento. Funciona no tema claro e no escuro, sem rolar par
 | Site › Editor do site / Blog | o endereço da página | **Editar** / **Abrir**, **Ver no site ↗** |
 | Oportunidades (quadro) | o valor | o cartão inteiro abre a oportunidade |
 | Card do cliente › Conta no site | — (a lista mostra as medidas) | **Client ID** do piloto que tem outro card |
+| Meu dia (serviço e corrida) | na corrida, quantos pilotos; no serviço, a barra **Checklists feitos** | **Card**, **Peças**, **Excluir** (gerente); os checklists, um por linha |
+| Balcão › invoice de peças | o total | **Tentar de novo**, **Enviar invoice por e-mail** (gerente), **Cobrar no cartão** |
+| Balcão › Revisão | o preço da peça; a barra **Pronta para cobrar** | **Cobrar**, **Guardar para o cliente**, **Usar a do cliente**, **Descartar** |
+| Estoque (a prateleira) | quanto tem, com a foto no lugar das iniciais | o cartão inteiro abre a peça; a lixeira fica no canto da foto |
+| Pedidos | para quando a peça é precisa | **Comprar** (marca para a compra, gerente), **cancelar**, **entreguei** |
+| Compras | o total (ou a previsão de entrega) | o cartão inteiro abre a compra |
+| Checklists › Modelos | quantos itens | **Começar hoje**, **Editar** (gerente; aberto, o cartão ocupa a linha inteira) |
+| Corridas (e os pilotos dentro da corrida) | a data | o cartão abre a corrida; o piloto convidado tem a situação e **✦ Prévia de custo** |
 
 ### Endereços antigos
 

@@ -24,6 +24,7 @@ import { Icon } from '../components/Icon'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr } from '../i18n'
 
 interface Dono { client_id: number; cliente: string; qty: number }
@@ -518,30 +519,24 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
   </div></Scrim>
 }
 
-/** Um card da prateleira: foto, nome, marca/medida, quanto tem, de quem é, preço. */
+/** Um card da prateleira (#313, o cartão D compacto): a situação, a foto, o nome, marca/medida, quanto tem (o bloco
+ *  grande), de quem é, o preço. O cartão inteiro abre a ficha; a lixeira fica por cima, no canto da foto. */
 function CardPeca({ i, gerente, onOpen, onExcluir }: { i: ItemEstoque; gerente: boolean; onOpen: () => void; onExcluir?: () => void }) {
   const semQtd = i.tracking === 'quantidade' && !i.contado
-  const card = <button className="pcard" onClick={onOpen}>
-    <div className="ph">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" draggable={false} /> : <Icon name="box" size={28} />}</div>
-    <div className="bd">
-      <div className="nm">{i.name}</div>
-      <div className="sb">{[i.subcategory, i.size].filter(Boolean).join(' · ') || ' '}</div>
-      {semQtd ? <div className="qt"><small style={{ marginLeft: 0 }}>{tr("sem quantidade")}</small></div>
-        : <div className={`qt${i.abaixo ? ' warn' : ''}`}>{i.nosso}<small>{i.unit}</small></div>}
-      <div className="ft">
-        {i.clientes.slice(0, 2).map(c => <Chip key={c.client_id} tone="info" title={tr("peça de cliente guardada com a gente")}>{c.qty} · {c.cliente}</Chip>)}
-        {i.clientes.length > 2 && <Chip tone="info">+{i.clientes.length - 2}</Chip>}
-        {i.abaixo && !semQtd && <Chip tone="warn">{tr("repor")}</Chip>}
-        {i.price !== null ? <Chip tone="accent">{usd(i.price)}</Chip> : gerente && <Chip tone="outline">{tr("sem preço")}</Chip>}
-        {noSite(i.na_loja).length > 0 && <Chip tone="ok" title={tr("a venda paga no site sai deste saldo")}>{tr("à venda no site")}</Chip>}
-      </div>
-    </div>
-  </button>
-  if (!onExcluir) return card
-  // A lixeira fica por cima da foto, fora do botão do card (botão dentro de botão não vale)
-  return <div className="pcard-w">{card}
-    <button className="pcard-lixo" aria-label={tr("Excluir {0}", i.name)} title={tr("Excluir peça")} onClick={onExcluir}><Icon name="trash" size={18} /></button>
-  </div>
+  const [rot, tom]: [string, TomD] = semQtd ? [tr("sem quantidade"), 'neutral'] : i.abaixo ? [tr("repor"), 'warn'] : [tr("em estoque"), 'ok']
+  const site = noSite(i.na_loja).length > 0
+  return <Cartao id={`peca-${i.id}`} mini className="pcard-d" abrir={onOpen} estado={rot} tom={tom}
+    capa={<div className="pcard-foto">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" draggable={false} /> : <Icon name="box" size={28} />}
+      {onExcluir && <button className="pcard-lixo" aria-label={tr("Excluir {0}", i.name)} title={tr("Excluir peça")} onClick={onExcluir}><Icon name="trash" size={18} /></button>}</div>}
+    nome={i.name} sub={[[i.subcategory, i.size].filter(Boolean).join(' · ')]}
+    grande={semQtd ? null : <span className={i.abaixo ? 'pcard-qt warn' : 'pcard-qt'}>{i.nosso}<small>{i.unit}</small></span>}>
+    {(i.clientes.length > 0 || i.price !== null || gerente || site) && <CdLista>
+      {i.clientes.slice(0, 2).map(c => <CdItem key={c.client_id} tom="info" glifo="★" valor={c.qty}><span title={tr("peça de cliente guardada com a gente")}>{c.cliente}</span></CdItem>)}
+      {i.clientes.length > 2 && <CdItem tom="info">+{i.clientes.length - 2}</CdItem>}
+      {i.price !== null ? <CdItem tom="neutral" glifo="$">{usd(i.price)}</CdItem> : gerente && <CdItem tom="warn">{tr("sem preço")}</CdItem>}
+      {site && <CdItem tom="ok"><span title={tr("a venda paga no site sai deste saldo")}>{tr("à venda no site")}</span></CdItem>}
+    </CdLista>}
+  </Cartao>
 }
 
 /** Clicar, segurar e arrastar a fileira para o lado — sem barra de rolagem (dono, 29/09).

@@ -18,6 +18,7 @@ import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '..
 import { Icon } from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
 
 interface Pedido { id: number; item_id: number | null; description: string; qty: number; unit: string; client_id: number | null; cliente: string | null
@@ -49,6 +50,8 @@ const ST_COMPRA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'a
 // andamento da ENTREGA, lido dos e-mails da loja/transportadora — não é o status do estoque
 const ST_ENVIO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
   pedido: [tr("pedido feito"), 'neutral'], pago: ['pago', 'info'], enviado: [tr("a caminho"), 'info'], entregue: ['entregue', 'accent'], cancelado: [tr("cancelado na loja"), 'crit'] }
+/** #313: o tom da pílula do cartão D (o accent dos chips vira o azul da informação) */
+const tomD = (t: string): TomD => t === 'accent' ? 'info' : (t as TomD)
 const EV: Record<string, string> = { pedido: tr("Pedido"), pagamento: tr("Pagamento"), envio: tr("Envio"), entregue: tr("Entregue"), cancelado: tr("Cancelado"), reembolso: tr("Reembolso") }
 // a etapa fina que o e-mail (ou a página de rastreio) disse — dono, 06/10: "se está em rota, se já foi entregue, se teve alguma atualização"
 const ETAPA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
@@ -168,23 +171,26 @@ export function Pedidos() {
     {lista.loading && !lista.data && <Loading />}
     {lista.data && (!lista.data.pedidos.length
       ? <Empty title={tr("Nenhum pedido aqui")}>{filtro === 'aberto' ? <>{tr("Precisa de algo?")} <b>{tr("Novo pedido")}</b>.</> : null}</Empty>
-      : <div className="card"><div className="tbl">{lista.data.pedidos.map(p => {
+      : <div className="cd-grade">{lista.data.pedidos.map(p => {
         const [rot, tom] = ST_PEDIDO[p.status] || [p.status, 'neutral']
-        return <div className="tr" key={p.id}>
-          {gerente && p.status === 'aberto' && <input type="checkbox" aria-label={tr("comprar {0}", p.description)} checked={marcados.includes(p.id)}
-            onChange={() => setMarcados(m => m.includes(p.id) ? m.filter(x => x !== p.id) : [...m, p.id])} />}
-          <div className="grow">
-            <b>{p.qty}{tr("×")} {p.description}</b> {!!p.urgent && <Chip tone="crit">{tr("urgente")}</Chip>}
-            <div className="small muted">{p.pedido_por || '—'} · {dia(p.created_at)}{p.cliente ? tr(" · kart de {0}", p.cliente) : ''}{p.needed_by ? tr(" · até {0}", dia(p.needed_by)) : ''}
-              {p.purchase_id ? <> · <Link to={`/compras/${p.purchase_id}`}>{tr("compra #")}{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
-            {p.status === 'comprando' && p.rastreio && <div className="row gap wrap"><Rastreios tracking={p.rastreio} carrier={p.transportadora} /></div>}
-          </div>
-          {p.status === 'comprando' && p.envio && ST_ENVIO[p.envio] && <Chip tone={ST_ENVIO[p.envio][1]}>{ST_ENVIO[p.envio][0]}</Chip>}
-          <Chip tone={tom}>{rot}</Chip>
-          {p.status === 'aberto' && (gerente || p.pedido_por === user?.name) && <button className="btn ghost sm" onClick={() => acao(p, 'cancelar')}>{tr("cancelar")}</button>}
-          {p.status === 'chegou' && <button className="btn sm" onClick={() => acao(p, 'entregue')}>{tr("entreguei")}</button>}
-        </div>
-      })}</div></div>)}
+        const envio = p.status === 'comprando' && p.envio && ST_ENVIO[p.envio] ? ST_ENVIO[p.envio] : null
+        const pode = p.status === 'aberto' && (gerente || p.pedido_por === user?.name)
+        return <Cartao key={p.id} id={`pedido-${p.id}`} nivel={2} estado={rot} tom={tomD(tom)} nome={<>{p.qty}{tr("×")} {p.description}</>}
+          sub={[`${p.pedido_por || '—'} · ${dia(p.created_at)}`, p.cliente ? tr("kart de {0}", p.cliente) : null,
+            p.purchase_id ? <Link key="c" to={`/compras/${p.purchase_id}`}>{tr("compra #")}{p.purchase_id}</Link> : null, p.notes]}
+          grande={p.needed_by ? dia(p.needed_by) : null} detalhe={p.needed_by ? tr("precisa até") : null}
+          acoes={(gerente && p.status === 'aberto') || pode || p.status === 'chegou' ? <>
+            {gerente && p.status === 'aberto' && <label className="btn cd-marca"><input type="checkbox" aria-label={tr("comprar {0}", p.description)} checked={marcados.includes(p.id)}
+              onChange={() => setMarcados(m => m.includes(p.id) ? m.filter(x => x !== p.id) : [...m, p.id])} /> {tr("Comprar")}</label>}
+            {pode && <button className="btn danger" onClick={() => acao(p, 'cancelar')}>{tr("cancelar")}</button>}
+            {p.status === 'chegou' && <button className="btn primary" onClick={() => acao(p, 'entregue')}>{tr("entreguei")}</button>}</> : null}>
+          {(!!p.urgent || envio || (p.status === 'comprando' && p.rastreio)) && <CdLista>
+            {!!p.urgent && <CdItem tom="crit">{tr("urgente")}</CdItem>}
+            {envio && <CdItem tom={tomD(envio[1])}>{envio[0]}</CdItem>}
+            {p.status === 'comprando' && p.rastreio && <CdItem tom="info" glifo="↗"><Rastreios tracking={p.rastreio} carrier={p.transportadora} /></CdItem>}
+          </CdLista>}
+        </Cartao>
+      })}</div>)}
     {novo && <NovoPedido onClose={() => setNovo(false)} onDone={lista.reload} />}
   </>
 }
@@ -501,21 +507,27 @@ export function Compras() {
       {lista.error && <ErrorState error={lista.error} retry={lista.reload} />}
       {lista.loading && !lista.data && <Loading />}
       {lista.data && (!compras.length ? <Empty title={filtro === 'abertas' ? tr("Nenhuma compra em aberto") : tr("Nada aqui")} />
-        : <div className="tbl">{compras.map(c => {
+        : <div className="cd-grade">{compras.map(c => {
           const [rot, tom] = ST_COMPRA[c.status] || [c.status, 'neutral']
-          return <div className="tr" key={c.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setFicha(c.id)}
-            onKeyDown={e => { if (e.key === 'Enter') setFicha(c.id) }}>
-            <div className="grow" style={{ minWidth: 0 }}><b>#{c.id} · {c.supplier}</b>
-              <div className="small muted">{c.linhas.length ? tr("{0} item(ns)", c.linhas.length) : tr("sem itens")}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? tr(" · ref. {0}", c.reference) : ''}{c.tracking ? ` · ${c.carrier || 'rastreio'} ${c.tracking.split(' ')[0]}` : ''}{(() => { const u = ultimoEvento(c); return u?.at ? ` · atualizado ${horaFL(u.at)}` : '' })()}{c.expected_at ? tr(" · previsão {0}", dia(c.expected_at)) : ''} · {c.source === 'email' ? tr("veio do e-mail") : c.criada_por || '—'}</div></div>
-            {gerente && (c.linhas.length ? c.total != null : c.email_total != null) && <span className="small">{usd(c.linhas.length ? c.total : c.email_total)}</span>}
-            {c.atrasada && <Chip tone="crit">{tr("atrasada")}</Chip>}
-            {c.payment_status === 'pendente' && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone="warn">{tr("a pagar")}</Chip>}
-            {c.entregue_sem_entrada ? <Chip tone="warn">{tr("entregue · falta entrada")}</Chip>
-              : (() => { const u = ultimoEvento(c); if (!['pedida', 'parcial', 'rascunho'].includes(c.status)) return null
-                if (u?.stage && ETAPA[u.stage] && u.stage !== 'pagamento_pendente' && u.stage !== 'mensagem') return <Chip tone={ETAPA[u.stage][1]}>{ETAPA[u.stage][0]}</Chip>
-                return c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] ? <Chip tone={ST_ENVIO[c.ship_status][1]}>{ST_ENVIO[c.ship_status][0]}</Chip> : null })()}
-            <Chip tone={tom}>{rot}</Chip>
-          </div>
+          const u = ultimoEvento(c)
+          const andando = ['pedida', 'parcial', 'rascunho'].includes(c.status)
+          const etapa: [string, string] | null = c.entregue_sem_entrada ? [tr("entregue · falta entrada"), 'warn'] : !andando ? null
+            : u?.stage && ETAPA[u.stage] && u.stage !== 'pagamento_pendente' && u.stage !== 'mensagem' ? ETAPA[u.stage]
+            : c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] ? ST_ENVIO[c.ship_status] : null
+          const total = gerente && (c.linhas.length ? c.total != null : c.email_total != null) ? usd(c.linhas.length ? c.total : c.email_total) : null
+          return <Cartao key={c.id} id={`compra-${c.id}`} abrir={() => setFicha(c.id)} estado={rot} tom={tomD(tom)} avatar={c.supplier} avatarTom="azul"
+            nome={`#${c.id} · ${c.supplier}`}
+            sub={[`${c.linhas.length ? tr("{0} item(ns)", c.linhas.length) : tr("sem itens")}${c.items_hint ? ` · ${c.items_hint}` : ''}${c.reference ? tr(" · ref. {0}", c.reference) : ''}`,
+              c.source === 'email' ? tr("veio do e-mail") : c.criada_por || '—']}
+            grande={total ?? (c.expected_at ? dia(c.expected_at) : null)} detalhe={total && c.expected_at ? tr("previsão {0}", dia(c.expected_at)) : !total && c.expected_at ? tr("previsão") : null}>
+            {(c.atrasada || etapa || (c.payment_status === 'pendente' && andando) || c.tracking || u?.at) && <CdLista>
+              {c.atrasada && <CdItem tom="crit">{tr("atrasada")}</CdItem>}
+              {c.payment_status === 'pendente' && andando && <CdItem tom="warn">{tr("a pagar")}</CdItem>}
+              {etapa && <CdItem tom={tomD(etapa[1])}>{etapa[0]}</CdItem>}
+              {c.tracking && <CdItem tom="info" glifo="↗">{`${c.carrier || 'rastreio'} ${c.tracking.split(' ')[0]}`}</CdItem>}
+              {u?.at && <CdItem tom="neutral" glifo="◷" valor={horaFL(u.at)}>{tr("atualizado")}</CdItem>}
+            </CdLista>}
+          </Cartao>
         })}</div>)}
     </Section>
 
